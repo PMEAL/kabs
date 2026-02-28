@@ -69,6 +69,8 @@ def solve_flow(
     if direction not in _BC_SETTERS:
         raise ValueError(f"direction must be 'x', 'y', or 'z', got {direction!r}")
 
+    if im.dtype == bool:
+        im = im.astype(np.int8)
     solver = SinglePhaseSolver(im)
     set_inlet, set_outlet = _BC_SETTERS[direction]
     getattr(solver, set_inlet)(_RHO_IN)

@@ -111,8 +111,9 @@ def solve_flow(
             time_pre = time_now
 
     if export_vtk:
-        solver.export_VTK(n_steps, prefix=output_prefix)
+        vtk_path = f"{output_prefix}-{n_steps}-{direction}"
+        solver.export_VTK(vtk_path)
         if verbose:
-            print(f"Exported {output_prefix}_{n_steps}.vtr")
+            print(f"Exported {vtk_path}.vtr")
 
     return solver

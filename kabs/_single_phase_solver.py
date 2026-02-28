@@ -607,9 +607,9 @@ class SinglePhaseSolver:
         self.fy = force[1]
         self.fz = force[2]
 
-    def export_VTK(self, n, prefix="LB_SingelPhase"):
+    def export_VTK(self, path):
         gridToVTK(
-            f"./{prefix}_{n}",
+            path,
             self.x,
             self.y,
             self.z,

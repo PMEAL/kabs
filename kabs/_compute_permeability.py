@@ -170,7 +170,8 @@ def compute_permeability(
 
     # ── Verbose output ────────────────────────────────────────────────────────
     if verbose:
-        print(f"\nPorosity (phi)        = {porosity:.4f}")
+        print(f"\nFlow direction        = {direction}")
+        print(f"Porosity (phi)        = {porosity:.4f}")
         print(f"Darcy velocity  u_D   = {u_darcy:.6e}  [lu/ts]")
         print(f"Mean pore vel   u_p   = {u_pore:.6e}  [lu/ts]")
         print(f"Check: u_D / phi      = {u_darcy / porosity:.6e}  (should ≈ u_p)")

@@ -28,10 +28,11 @@ def solve_flow(
     nu=1.0 / 6.0,
     log_every=500,
     export_vtk=True,
-    output_prefix="LB_SingelPhase",
+    output_prefix="LB_SinglePhase",
     verbose=True,
 ):
-    """Run a pressure-driven single-phase LBM simulation to steady state.
+    """
+    Run a pressure-driven single-phase LBM simulation to steady state.
 
     Parameters
     ----------
@@ -60,7 +61,7 @@ def solve_flow(
 
     Notes
     -----
-    Taichi must be initialised by the caller before invoking this function::
+    Taichi must be initialized by the caller before invoking this function:
 
         import taichi as ti
         ti.init(arch=ti.cpu)

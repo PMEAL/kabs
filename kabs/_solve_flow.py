@@ -37,7 +37,8 @@ def solve_flow(
     Parameters
     ----------
     im : np.ndarray, shape (nx, ny, nz)
-        Binary image of the pore space.  0 = pore, non-zero = solid.
+        Binary image of the pore space.  1 (or True) = pore, 0 (or False) = solid.
+        This matches the PoreSpy convention.
     direction : {'x', 'y', 'z'}
         Axis along which the pressure gradient is applied.  Default ``'x'``.
     n_steps : int
@@ -70,9 +71,10 @@ def solve_flow(
     if direction not in _BC_SETTERS:
         raise ValueError(f"direction must be 'x', 'y', or 'z', got {direction!r}")
 
-    if im.dtype == bool:
-        im = im.astype(np.int8)
-    solver = SinglePhaseSolver(im)
+    # Public convention: 1=pore, 0=solid (PoreSpy-compatible).
+    # SinglePhaseSolver uses the opposite, so flip here.
+    solid_im = (im == 0).astype(np.int8)
+    solver = SinglePhaseSolver(solid_im)
     set_inlet, set_outlet = _BC_SETTERS[direction]
     getattr(solver, set_inlet)(_RHO_IN)
     getattr(solver, set_outlet)(_RHO_OUT)

@@ -82,8 +82,8 @@ class SinglePhaseSolver:
         self.vz_bczr = 0.0
 
         if self.sparse_storage == False:
-            self.f = ti.Vector.field(19, ti.f32, shape=(nx, ny, nz))
-            self.F = ti.Vector.field(19, ti.f32, shape=(nx, ny, nz))
+            self.f = ti.Vector.field(19, ti.f32, shape=(nx, ny, nz), layout=ti.Layout.SOA)
+            self.F = ti.Vector.field(19, ti.f32, shape=(nx, ny, nz), layout=ti.Layout.SOA)
             self.rho = ti.field(ti.f32, shape=(nx, ny, nz))
             self.v = ti.Vector.field(3, ti.f32, shape=(nx, ny, nz))
         else:

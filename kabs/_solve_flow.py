@@ -30,6 +30,7 @@ def solve_flow(
     export_vtk=True,
     output_prefix="LB_SinglePhase",
     verbose=True,
+    sparse=False,
 ):
     """
     Run a pressure-driven single-phase LBM simulation to steady state.
@@ -53,6 +54,11 @@ def solve_flow(
         Filename prefix for the VTR output.  Default ``'LB_SingelPhase'``.
     verbose : bool
         Print progress to stdout.  Default True.
+    sparse : bool
+        If True, use Taichi sparse (pointer-backed) storage for the
+        distribution fields.  Only pore cells are allocated, which can
+        significantly reduce memory on images with high solid fractions.
+        Default False (dense storage).
 
     Returns
     -------
@@ -74,7 +80,7 @@ def solve_flow(
     # Public convention: 1=pore, 0=solid (PoreSpy-compatible).
     # SinglePhaseSolver uses the opposite, so flip here.
     solid_im = (im == 0).astype(np.int8)
-    solver = SinglePhaseSolver(solid_im)
+    solver = SinglePhaseSolver(solid_im, sparse_storage=sparse)
     set_inlet, set_outlet = _BC_SETTERS[direction]
     getattr(solver, set_inlet)(_RHO_IN)
     getattr(solver, set_outlet)(_RHO_OUT)

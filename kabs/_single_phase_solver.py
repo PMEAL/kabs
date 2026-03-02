@@ -157,7 +157,7 @@ class SinglePhaseSolver:
         self.bc_vel_z_left = [self.vx_bczl, self.vy_bczl, self.vz_bczl]
         self.bc_vel_z_right = [self.vx_bczr, self.vy_bczr, self.vz_bczr]
 
-        self.tau_f = self.niu / 3.0 + 0.5
+        self.tau_f = 3.0 * self.niu + 0.5
         self.s_v = 1.0 / self.tau_f
         self.s_other = 8.0 * (2.0 - self.s_v) / (8.0 - self.s_v)
 

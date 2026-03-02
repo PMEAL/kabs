@@ -81,7 +81,7 @@ class SinglePhaseSolver:
         self.vy_bczr = 0.0
         self.vz_bczr = 0.0
 
-        if sparse_storage == False:
+        if self.sparse_storage == False:
             self.f = ti.Vector.field(19, ti.f32, shape=(nx, ny, nz))
             self.F = ti.Vector.field(19, ti.f32, shape=(nx, ny, nz))
             self.rho = ti.field(ti.f32, shape=(nx, ny, nz))
@@ -111,8 +111,8 @@ class SinglePhaseSolver:
         self.w = ti.field(ti.f32, shape=(19))
         self.ext_f = ti.Vector.field(3, ti.f32, shape=())
 
-        self.M = ti.Matrix.field(19, 19, ti.f32, shape=())
-        self.inv_M = ti.Matrix.field(19, 19, ti.f32, shape=())
+        self.M = ti.field(ti.f32, (19, 19))
+        self.inv_M = ti.field(ti.f32, (19, 19))
 
         M_np = np.array(
             [
@@ -141,9 +141,9 @@ class SinglePhaseSolver:
 
         self.LR = [0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15, 18, 17]
 
-        self.M[None] = ti.Matrix(M_np)
+        self.M.from_numpy(M_np.astype(np.float32))
 
-        self.inv_M[None] = ti.Matrix(inv_M_np)
+        self.inv_M.from_numpy(inv_M_np.astype(np.float32))
 
         self.x = np.linspace(0, nx, nx)
         self.y = np.linspace(0, ny, ny)
@@ -192,8 +192,6 @@ class SinglePhaseSolver:
             self.force_flag = 1
         else:
             self.force_flag = 0
-        ti.static(self.inv_M)
-        ti.static(self.M)
         ti.static(self.S_dig)
         self.static_init()
         self.init()
@@ -302,7 +300,10 @@ class SinglePhaseSolver:
     def collision(self):
         for i, j, k in self.rho:
             if self.solid[i, j, k] == 0 and (i < self.nx)*(j < self.ny)*(k < self.nz):
-                m_temp = self.M[None] @ self.F[i, j, k]
+                m_temp = ti.Vector([0.0] * 19)
+                for row in ti.static(range(19)):
+                    for col in ti.static(range(19)):
+                        m_temp[row] += self.M[row, col] * self.F[i, j, k][col]
                 meq = self.meq_vec(self.rho[i, j, k], self.v[i, j, k])
                 m_temp -= self.S_dig[None] * (m_temp - meq)
                 f = self.calc_local_force(i, j, k)
@@ -320,34 +321,14 @@ class SinglePhaseSolver:
                                     )
                                     / 9.0
                                 )
-                                * self.M[None][s, idx]
+                                * self.M[s, idx]
                             )
                         m_temp[s] += (1 - 0.5 * self.S_dig[None][s]) * f_guo
 
-                self.f[i, j, k] = ti.Vector(
-                    [
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                    ]
-                )
-                self.f[i, j, k] += self.inv_M[None] @ m_temp
+                self.f[i, j, k] = ti.Vector([0.0] * 19)
+                for row in ti.static(range(19)):
+                    for col in ti.static(range(19)):
+                        self.f[i, j, k][row] += self.inv_M[row, col] * m_temp[col]
 
     @ti.func
     def periodic_index(self, i):

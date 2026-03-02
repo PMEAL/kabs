@@ -299,7 +299,7 @@ class SinglePhaseSolver:
     @ti.kernel
     def collision(self):
         for i, j, k in self.rho:
-            if self.solid[i, j, k] == 0 and (i < self.nx)*(j < self.ny)*(k < self.nz):
+            if self.solid[i, j, k] == 0:
                 m_temp = ti.Vector([0.0] * 19)
                 for row in ti.static(range(19)):
                     for col in ti.static(range(19)):
@@ -351,7 +351,7 @@ class SinglePhaseSolver:
     @ti.kernel
     def streaming1(self):
         for i in ti.grouped(self.rho):
-            if self.solid[i] == 0 and (i.x < self.nx)*(i.y < self.ny)*(i.z < self.nz):
+            if self.solid[i] == 0:
                 for s in ti.static(range(19)):
                     ip = self.periodic_index(i + self.e[s])
                     if self.solid[ip] == 0:
@@ -492,7 +492,7 @@ class SinglePhaseSolver:
     @ti.kernel
     def streaming3(self):
         for i in ti.grouped(self.rho):
-            if self.solid[i] == 0 and (i.x < self.nx)*(i.y < self.ny)*(i.z < self.nz):
+            if self.solid[i] == 0:
                 self.rho[i] = 0
                 self.v[i] = ti.Vector([0, 0, 0])
                 self.f[i] = self.F[i]

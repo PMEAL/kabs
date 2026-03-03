@@ -31,6 +31,7 @@ def solve_flow(
     output_prefix="LB_SinglePhase",
     verbose=True,
     sparse=False,
+    tol=1e-3,
 ):
     """
     Run a pressure-driven single-phase LBM simulation to steady state.
@@ -59,6 +60,11 @@ def solve_flow(
         distribution fields.  Only pore cells are allocated, which can
         significantly reduce memory on images with high solid fractions.
         Default False (dense storage).
+    tol : float or None
+        Convergence tolerance.  The simulation stops early when the relative
+        change in the total velocity magnitude between log intervals falls
+        below this value: ``delta|v| / |v| < tol``.  Set to ``None`` to
+        always run the full ``n_steps``.  Default 1e-3.
 
     Returns
     -------
@@ -90,6 +96,7 @@ def solve_flow(
     time_init = time.time()
     time_pre = time_init
     v_prev = None
+    final_step = n_steps
 
     for i in range(n_steps + 1):
         solver.step()
@@ -111,15 +118,24 @@ def solve_flow(
                 )
 
             v_now = solver.v.to_numpy()
-            if v_prev is not None and verbose:
+            if v_prev is not None:
                 v_total  = np.sum(np.abs(v_now))
                 v_change = np.sum(np.abs(v_now - v_prev))
-                print(f"         |v|={v_total:.4e}  delta|v|={v_change:.4e}")
+                if verbose:
+                    print(f"         |v|={v_total:.4e}  delta|v|={v_change:.4e}")
+                if tol is not None and v_total > 0 and v_change / v_total < tol:
+                    if verbose:
+                        print(
+                            f"Converged at step {i} "
+                            f"(delta|v|/|v| = {v_change/v_total:.2e} < tol={tol:.2e})"
+                        )
+                    final_step = i
+                    break
             v_prev = v_now
             time_pre = time_now
 
     if export_vtk:
-        vtk_path = f"{output_prefix}-{n_steps}-{direction}"
+        vtk_path = f"{output_prefix}-{final_step}-{direction}"
         solver.export_VTK(vtk_path)
         if verbose:
             print(f"Exported {vtk_path}.vtr")

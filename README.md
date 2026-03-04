@@ -13,7 +13,7 @@ The LBM implementation is adapted from
 ## Installation
 
 ```bash
-git clone https://github.com/your-org/kabs.git
+git clone https://github.com/PMEAL/kabs.git
 cd kabs
 pip install -e .
 ```
@@ -147,3 +147,4 @@ solver = solve_flow(im, direction="x", sparse=True)
 
 4. The result in lattice units is scaled to m² (or milliDarcy) using the physical
    voxel size dx_m.
+

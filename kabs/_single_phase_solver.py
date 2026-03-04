@@ -20,6 +20,7 @@ class SinglePhaseSolver:
     def __init__(self, im, sparse_storage=False):
         self.enable_projection = True
         self.sparse_storage = sparse_storage
+        object.__setattr__(self, '_last_vtr', None)
 
         nx, ny, nz = im.shape
         self.nx, self.ny, self.nz = nx, ny, nz

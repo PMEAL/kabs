@@ -134,9 +134,11 @@ def solve_flow(
             v_prev = v_now
             time_pre = time_now
 
+    object.__setattr__(solver, '_last_vtr', None)
     if export_vtk:
         vtk_path = f"{output_prefix}-{final_step}-{direction}"
         solver.export_VTK(vtk_path)
+        object.__setattr__(solver, '_last_vtr', vtk_path + ".vtr")
         if verbose:
             print(f"Exported {vtk_path}.vtr")
 

@@ -1,10 +1,6 @@
 # `kabs`
 
-`kabs` computes the absolute (Darcy) permeability and effective diffusivity of a porous
-material from its 3D tomographic image using the Lattice Boltzmann Method (LBM). Given a
-binary voxel image of the pore space, it solves single-phase incompressible creeping flow
-(for permeability) and passive scalar diffusion (for effective diffusivity), returning
-results in lattice units or physical units.
+`kabs` computes the absolute (Darcy) permeability of a porous material from its 3D tomographic image using the Lattice Boltzmann Method (LBM). Given a binary voxel image of the pore space, it solves single-phase incompressible creeping flow, returning results in lattice units or physical units.
 
 ![](taichi_lbm.png)
 
@@ -120,66 +116,6 @@ allocated in GPU memory:
 ```python
 solver = solve_flow(im, direction="x", sparse=True)
 ```
-
----
-
-## Effective diffusivity
-
-`kabs` can also compute effective diffusivity D_eff using a D3Q7 BGK scalar LBM — a
-simpler and faster kernel than the D3Q19 MRT used for flow.
-
-```python
-from kabs import solve_diffusion, compute_effective_diffusivity
-
-# Run diffusion simulation (concentration-driven, analogous to pressure-driven flow)
-solver = solve_diffusion(im, direction="x")
-
-# Compute D_eff from the saved .vtr file
-results = compute_effective_diffusivity("LB_Diffusion-<step>-x.vtr", direction="x")
-print(f"D_eff/D_0   = {results['D_eff_norm']:.4f}")
-print(f"Tortuosity  = {results['tortuosity']:.4f}")
-```
-
-### Physical D_eff
-
-Pass the bulk diffusivity `D0_m2s` to get results in m²/s:
-
-```python
-# O₂ in air at 25 °C
-results = compute_effective_diffusivity(
-    "LB_Diffusion-<step>-x.vtr",
-    direction="x",
-    D0_m2s=2.1e-5,
-)
-print(f"D_eff = {results['D_eff_m2s']:.4e} m²/s")
-```
-
-### Return values
-
-`compute_effective_diffusivity` returns a dict:
-
-| Key               | Description                                               |
-|-------------------|-----------------------------------------------------------|
-| `porosity`        | Pore volume fraction (dimensionless)                      |
-| `D_eff_norm`      | D_eff / D_0 (dimensionless ratio, primary output)         |
-| `formation_factor`| F = D_0 / D_eff                                           |
-| `tortuosity`      | τ = F / φ = D_0 / (D_eff × φ), always > 1                |
-| `D_eff_m2s`       | D_eff in m²/s (`None` if `D0_m2s` not given)             |
-
-### Diffusivity parameter D
-
-The D3Q7 BGK solver uses a lattice diffusivity `D` (default `D=1/4`, τ_D=1.5).
-This is the optimal value: steps to convergence scale as **L²/D**, so larger `D`
-is faster, but accuracy degrades above τ_D ≈ 2 (D ≈ 3/8).
-
-| D   | τ_D  | Speed vs D=1/6 | Notes                         |
-|-----|------|----------------|-------------------------------|
-| 1/6 | 1.17 | 1×             | matches flow solver convention |
-| **1/4** | **1.50** | **~1.5×** | **default, sweet spot**   |
-| 1/3 | 1.83 | ~2×            | slightly less accurate        |
-| 1/2 | 2.50 | ~3×            | accuracy starts to degrade    |
-
----
 
 ## Return values (permeability)
 

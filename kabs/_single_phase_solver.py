@@ -366,14 +366,9 @@ class SinglePhaseSolver:
             for j, k in ti.ndrange((0, self.ny), (0, self.nz)):
                 if self.solid[0, j, k] == 0:
                     for s in ti.static(range(19)):
-                        if self.solid[1, j, k] > 0:
-                            self.F[0, j, k][s] = self.feq(
-                                s, self.rho_bcxl, self.v[1, j, k]
-                            )
-                        else:
-                            self.F[0, j, k][s] = self.feq(
-                                s, self.rho_bcxl, self.v[0, j, k]
-                            )
+                        self.F[0, j, k][s] = self.feq(
+                            s, self.rho_bcxl, self.v[1, j, k]
+                        )
 
         if ti.static(self.bc_x_left == 2):
             for j, k in ti.ndrange((0, self.ny), (0, self.nz)):
@@ -387,14 +382,9 @@ class SinglePhaseSolver:
             for j, k in ti.ndrange((0, self.ny), (0, self.nz)):
                 if self.solid[self.nx - 1, j, k] == 0:
                     for s in ti.static(range(19)):
-                        if self.solid[self.nx - 2, j, k] > 0:
-                            self.F[self.nx - 1, j, k][s] = self.feq(
-                                s, self.rho_bcxr, self.v[self.nx - 2, j, k]
-                            )
-                        else:
-                            self.F[self.nx - 1, j, k][s] = self.feq(
-                                s, self.rho_bcxr, self.v[self.nx - 1, j, k]
-                            )
+                        self.F[self.nx - 1, j, k][s] = self.feq(
+                            s, self.rho_bcxr, self.v[self.nx - 2, j, k]
+                        )
 
         if ti.static(self.bc_x_right == 2):
             for j, k in ti.ndrange((0, self.ny), (0, self.nz)):
@@ -409,14 +399,9 @@ class SinglePhaseSolver:
             for i, k in ti.ndrange((0, self.nx), (0, self.nz)):
                 if self.solid[i, 0, k] == 0:
                     for s in ti.static(range(19)):
-                        if self.solid[i, 1, k] > 0:
-                            self.F[i, 0, k][s] = self.feq(
-                                s, self.rho_bcyl, self.v[i, 1, k]
-                            )
-                        else:
-                            self.F[i, 0, k][s] = self.feq(
-                                s, self.rho_bcyl, self.v[i, 0, k]
-                            )
+                        self.F[i, 0, k][s] = self.feq(
+                            s, self.rho_bcyl, self.v[i, 1, k]
+                        )
 
         if ti.static(self.bc_y_left == 2):
             for i, k in ti.ndrange((0, self.nx), (0, self.nz)):
@@ -430,14 +415,9 @@ class SinglePhaseSolver:
             for i, k in ti.ndrange((0, self.nx), (0, self.nz)):
                 if self.solid[i, self.ny - 1, k] == 0:
                     for s in ti.static(range(19)):
-                        if self.solid[i, self.ny - 2, k] > 0:
-                            self.F[i, self.ny - 1, k][s] = self.feq(
-                                s, self.rho_bcyr, self.v[i, self.ny - 2, k]
-                            )
-                        else:
-                            self.F[i, self.ny - 1, k][s] = self.feq(
-                                s, self.rho_bcyr, self.v[i, self.ny - 1, k]
-                            )
+                        self.F[i, self.ny - 1, k][s] = self.feq(
+                            s, self.rho_bcyr, self.v[i, self.ny - 2, k]
+                        )
 
         if ti.static(self.bc_y_right == 2):
             for i, k in ti.ndrange((0, self.nx), (0, self.nz)):
@@ -452,14 +432,9 @@ class SinglePhaseSolver:
             for i, j in ti.ndrange((0, self.nx), (0, self.ny)):
                 if self.solid[i, j, 0] == 0:
                     for s in ti.static(range(19)):
-                        if self.solid[i, j, 1] > 0:
-                            self.F[i, j, 0][s] = self.feq(
-                                s, self.rho_bczl, self.v[i, j, 1]
-                            )
-                        else:
-                            self.F[i, j, 0][s] = self.feq(
-                                s, self.rho_bczl, self.v[i, j, 0]
-                            )
+                        self.F[i, j, 0][s] = self.feq(
+                            s, self.rho_bczl, self.v[i, j, 1]
+                        )
 
         if ti.static(self.bc_z_left == 2):
             for i, j in ti.ndrange((0, self.nx), (0, self.ny)):
@@ -473,14 +448,9 @@ class SinglePhaseSolver:
             for i, j in ti.ndrange((0, self.nx), (0, self.ny)):
                 if self.solid[i, j, self.nz - 1] == 0:
                     for s in ti.static(range(19)):
-                        if self.solid[i, j, self.nz - 2] > 0:
-                            self.F[i, j, self.nz - 1][s] = self.feq(
-                                s, self.rho_bczr, self.v[i, j, self.nz - 2]
-                            )
-                        else:
-                            self.F[i, j, self.nz - 1][s] = self.feq(
-                                s, self.rho_bczr, self.v[i, j, self.nz - 1]
-                            )
+                        self.F[i, j, self.nz - 1][s] = self.feq(
+                            s, self.rho_bczr, self.v[i, j, self.nz - 2]
+                        )
 
         if ti.static(self.bc_z_right == 2):
             for i, j in ti.ndrange((0, self.nx), (0, self.ny)):

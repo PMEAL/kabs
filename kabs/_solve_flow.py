@@ -7,7 +7,7 @@ import numpy as np
 from ._single_phase_solver import SinglePhaseSolver
 
 
-__all__ = ["solve_flow"]
+__all__ = ["solve_flow", "FlowResult"]
 
 # Pressure BCs are hardcoded: only the difference matters for Darcy's law,
 # and both u_D and gradP scale with Δρ so they cancel in k = u_D*mu/gradP.
@@ -19,6 +19,42 @@ _BC_SETTERS = {
     "y": ("set_bc_rho_y0", "set_bc_rho_y1"),
     "z": ("set_bc_rho_z0", "set_bc_rho_z1"),
 }
+
+
+class FlowResult:
+    """Container for a converged single-phase LBM flow simulation.
+
+    Attributes
+    ----------
+    solid : np.ndarray, shape (nx, ny, nz), dtype int8
+        Solid mask in internal convention: 1 = solid, 0 = pore.
+    rho : np.ndarray, shape (nx, ny, nz), dtype float32
+        Density field.
+    velocity : np.ndarray, shape (nx, ny, nz, 3), dtype float32
+        Velocity field (vx, vy, vz) at each voxel.
+    direction : str
+        Flow direction used in the simulation ('x', 'y', or 'z').
+    nu : float
+        Kinematic viscosity in lattice units.
+    """
+
+    def __init__(self, solver, direction, nu):
+        self.direction = direction
+        self.nu = nu
+        self._solver = solver
+        self.solid    = solver.solid.to_numpy()
+        self.rho      = solver.rho.to_numpy()
+        self.velocity = solver.v.to_numpy()   # shape (nx, ny, nz, 3)
+
+    def export_to_vtk(self, prefix):
+        """Write a VTK Rectilinear Grid (.vtr) file.
+
+        Parameters
+        ----------
+        prefix : str
+            Output path without extension (pyevtk appends ``.vtr``).
+        """
+        self._solver.export_VTK(prefix)
 
 
 def solve_flow(
@@ -50,9 +86,10 @@ def solve_flow(
     log_every : int
         Print a progress line every this many steps.  Default 500.
     export_vtk : bool
-        If True (default), write ``{output_prefix}_{n_steps}.vtr`` at the end.
+        If True (default), write ``{output_prefix}-{final_step}-{direction}.vtr``
+        at the end.
     output_prefix : str
-        Filename prefix for the VTR output.  Default ``'LB_SingelPhase'``.
+        Filename prefix for the VTR output.  Default ``'LB_SinglePhase'``.
     verbose : bool
         Print progress to stdout.  Default True.
     sparse : bool
@@ -68,9 +105,11 @@ def solve_flow(
 
     Returns
     -------
-    solver : SinglePhaseSolver
-        The solver object after the run.  Call ``solver.export_VTK(n)``
-        manually if you set ``export_vtk=False`` and want to save later.
+    result : FlowResult
+        Result object containing ``solid``, ``rho``, ``velocity``, ``direction``,
+        and ``nu`` as numpy arrays/values.  Pass directly to
+        ``compute_permeability()`` or ``compute_hydraulic_conductance()``,
+        or call ``result.export_to_vtk(prefix)`` to save a VTR file.
 
     Notes
     -----
@@ -134,12 +173,12 @@ def solve_flow(
             v_prev = v_now
             time_pre = time_now
 
-    object.__setattr__(solver, '_last_vtr', None)
+    result = FlowResult(solver, direction, nu)
+
     if export_vtk:
         vtk_path = f"{output_prefix}-{final_step}-{direction}"
-        solver.export_VTK(vtk_path)
-        object.__setattr__(solver, '_last_vtr', vtk_path + ".vtr")
+        result.export_to_vtk(vtk_path)
         if verbose:
             print(f"Exported {vtk_path}.vtr")
 
-    return solver
+    return result

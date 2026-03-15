@@ -90,6 +90,7 @@ def plot_cross_section(filename, direction="x", axis=2, streamlines=None):
 
     return vx_long
 
+
 def add_streamlines(filename, ax, axis, **kwargs):
     velocity = vtr_to_array(filename)
     mid = [int(s / 2) for s in velocity.shape[:3]]

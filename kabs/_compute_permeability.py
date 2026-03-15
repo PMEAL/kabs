@@ -1,7 +1,9 @@
 """
 Compute Darcy permeability from LBM single-phase simulation output.
 
-Reads the .vtr file written by pyevtk using only numpy (no vtk/pyvista needed).
+Accepts either a ``FlowResult`` object (returned by ``solve_flow``) or a path
+to a .vtr file written by pyevtk.  When passed a ``FlowResult`` the VTR
+round-trip is skipped entirely.
 
 Darcy's Law:  k = u_D * mu / |dP/dL|
 
@@ -73,47 +75,8 @@ _RHO_IN  = 1.00
 _RHO_OUT = 0.99
 
 
-def compute_permeability(
-    vtr_file,
-    direction="x",
-    nu=1.0 / 6.0,
-    dx_m=None,
-    verbose=True,
-):
-    """Compute Darcy permeability from a single-phase LBM .vtr output file.
-
-    Parameters
-    ----------
-    vtr_file : str or path-like
-        Path to the VTR file written by ``SinglePhaseSolver.export_VTK()``.
-    direction : {'x', 'y', 'z'}
-        Flow direction used in the simulation.  Determines which velocity
-        component and domain length are used.  Default ``'x'``.
-    nu : float
-        Kinematic viscosity in lattice units.  Default 1/6.
-    dx_m : float or None
-        Physical voxel size in metres.  If given, results are also reported
-        in m² and milliDarcy.  E.g. ``dx_m=2.85e-6`` for a 2.85-µm scan.
-    verbose : bool
-        Print a summary of results to stdout.  Default True.
-
-    Returns
-    -------
-    dict with keys:
-        porosity   – pore fraction (dimensionless)
-        u_darcy    – superficial velocity in the flow direction (lu/ts)
-        u_pore     – mean pore-space velocity (lu/ts)
-        k_lu       – permeability in lattice units (voxels²)
-        k_m2       – permeability in m²  (None if dx_m is None)
-        k_mD       – permeability in milliDarcy  (None if dx_m is None)
-    """
-    direction = direction.lower()
-    if direction not in ("x", "y", "z"):
-        raise ValueError(f"direction must be 'x', 'y', or 'z', got {direction!r}")
-
-    cs2 = 1.0 / 3.0  # speed-of-sound squared for D3Q19
-
-    # ── Read VTR file ─────────────────────────────────────────────────────────
+def _read_flow_vtr(vtr_file, verbose):
+    """Read solid and velocity arrays from a .vtr file. Returns (solid, velocity, nx, ny, nz)."""
     if verbose:
         print(f"Reading {vtr_file} ...")
     with open(vtr_file, "rb") as fh:
@@ -134,41 +97,40 @@ def compute_permeability(
     solid    = _read_array(raw, binary_start, arrays, "Solid",    nx, ny, nz)
     rho      = _read_array(raw, binary_start, arrays, "rho",      nx, ny, nz)
     velocity = _read_array(raw, binary_start, arrays, "velocity", nx, ny, nz)
-    vx = velocity[..., 0]
-    vy = velocity[..., 1]
-    vz = velocity[..., 2]
     if verbose:
         print("  Arrays loaded.")
+    return solid, rho, velocity
 
-    # ── Porosity ──────────────────────────────────────────────────────────────
+
+def _compute_permeability_core(solid, velocity, direction, nu, dx_m, verbose):
+    """Compute permeability given numpy arrays (shared by file and object paths)."""
     pore_mask = solid == 0
     porosity  = pore_mask.sum() / pore_mask.size
 
-    # ── Darcy (superficial) velocity ──────────────────────────────────────────
-    # Average the flow-direction component over the ENTIRE domain;
-    # solid voxels have v=0, so this naturally accounts for porosity.
+    vx = velocity[..., 0]
+    vy = velocity[..., 1]
+    vz = velocity[..., 2]
+    nx, ny, nz = solid.shape
+
     v_flow = {"x": vx, "y": vy, "z": vz}[direction]
     L_dir  = {"x": nx, "y": ny, "z": nz}[direction]
 
     u_darcy = float(np.mean(v_flow))
     u_pore  = float(np.mean(v_flow[pore_mask]))
 
-    # ── Pressure gradient ─────────────────────────────────────────────────────
+    cs2   = 1.0 / 3.0
     L     = L_dir
     dP    = (_RHO_IN - _RHO_OUT) * cs2
     gradP = dP / L
 
-    # ── Darcy permeability ────────────────────────────────────────────────────
-    mu   = nu  # dynamic viscosity; rho_ref = 1 in LBM so mu = nu
+    mu   = nu
     k_lu = u_darcy * mu / gradP
 
-    # ── Physical units ────────────────────────────────────────────────────────
     k_m2 = k_mD = None
     if dx_m is not None:
         k_m2 = k_lu * dx_m ** 2
-        k_mD = k_m2 / 9.869233e-16  # 1 mD = 9.869e-16 m^2
+        k_mD = k_m2 / 9.869233e-16
 
-    # ── Verbose output ────────────────────────────────────────────────────────
     if verbose:
         print(f"\nFlow direction        = {direction}")
         print(f"Porosity (phi)        = {porosity:.4f}")
@@ -185,10 +147,9 @@ def compute_permeability(
             print(f"  k = {k_mD:.4f}   mD (milliDarcy)")
         else:
             print("\nTo get physical units: pass dx_m (voxel size in metres).")
-        all_v   = {"x": vx, "y": vy, "z": vz}
+        all_v = {"x": vx, "y": vy, "z": vz}
         transverse = [c for c in ("x", "y", "z") if c != direction]
         print("\n--- Sanity checks ---")
-        print(f"Mean rho (pore space) = {np.mean(rho[pore_mask]):.6f}  (expect ~{(_RHO_IN + _RHO_OUT) / 2:.3f})")
         print(f"v{direction} pore: min={v_flow[pore_mask].min():.3e}  max={v_flow[pore_mask].max():.3e}")
         for c in transverse:
             vc = all_v[c]
@@ -202,3 +163,64 @@ def compute_permeability(
         "k_m2":     k_m2,
         "k_mD":     k_mD,
     }
+
+
+def compute_permeability(
+    source,
+    direction=None,
+    nu=None,
+    dx_m=None,
+    verbose=True,
+):
+    """Compute Darcy permeability from a single-phase LBM simulation.
+
+    Parameters
+    ----------
+    source : FlowResult or str/path-like
+        Either a ``FlowResult`` returned by ``solve_flow()``, or a path to a
+        ``.vtr`` file written by ``SinglePhaseSolver.export_VTK()``.
+        When a ``FlowResult`` is given, ``direction`` and ``nu`` default to the
+        values stored in the result.
+    direction : {'x', 'y', 'z'} or None
+        Flow direction.  If *None* and ``source`` is a ``FlowResult``, the
+        direction is taken from ``source.direction``; otherwise defaults to
+        ``'x'``.
+    nu : float or None
+        Kinematic viscosity in lattice units.  If *None* and ``source`` is a
+        ``FlowResult``, taken from ``source.nu``; otherwise defaults to 1/6.
+    dx_m : float or None
+        Physical voxel size in metres.  If given, results are also reported
+        in m² and milliDarcy.  E.g. ``dx_m=2.85e-6`` for a 2.85-µm scan.
+    verbose : bool
+        Print a summary of results to stdout.  Default True.
+
+    Returns
+    -------
+    dict with keys:
+        porosity   – pore fraction (dimensionless)
+        u_darcy    – superficial velocity in the flow direction (lu/ts)
+        u_pore     – mean pore-space velocity (lu/ts)
+        k_lu       – permeability in lattice units (voxels²)
+        k_m2       – permeability in m²  (None if dx_m is None)
+        k_mD       – permeability in milliDarcy  (None if dx_m is None)
+    """
+    from ._solve_flow import FlowResult
+
+    if isinstance(source, FlowResult):
+        _dir = direction if direction is not None else source.direction
+        _nu  = nu        if nu        is not None else source.nu
+        solid    = source.solid
+        velocity = source.velocity
+    else:
+        _dir = direction if direction is not None else "x"
+        _nu  = nu        if nu        is not None else 1.0 / 6.0
+        _dir = _dir.lower()
+        if _dir not in ("x", "y", "z"):
+            raise ValueError(f"direction must be 'x', 'y', or 'z', got {_dir!r}")
+        solid, _rho, velocity = _read_flow_vtr(source, verbose)
+
+    _dir = _dir.lower()
+    if _dir not in ("x", "y", "z"):
+        raise ValueError(f"direction must be 'x', 'y', or 'z', got {_dir!r}")
+
+    return _compute_permeability_core(solid, velocity, _dir, _nu, dx_m, verbose)

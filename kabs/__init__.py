@@ -3,3 +3,6 @@ from ._solve_flow import *
 from ._compute_permeability import *
 from ._compute_conductance import *
 from ._plots import *
+
+# Result containers (also exported via their respective solve modules' __all__)
+from ._solve_flow import FlowResult

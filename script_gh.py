@@ -1,6 +1,7 @@
+# %%
 import taichi as ti
 import numpy as np
-from kabs import solve_flow, compute_conductance, plot_cross_section, add_streamlines
+from kabs import solve_flow, compute_hydraulic_conductance, plot_cross_section, add_streamlines
 from porespy.tools import get_edt
 import matplotlib.pyplot as plt
 
@@ -28,16 +29,16 @@ balls[-1, cy, cz] = False
 balls = edt(balls) < Rp
 # box[balls] = True
 
-solver = solve_flow(
+soln = solve_flow(
     im=box,
     direction="x",   # cylinder axis is numpy axis 0 = solver x
     export_vtk=False,
     tol=1e-4,
 )
-solver.export_VTK("cylinder")
+# soln.export_to_vtk("cylinder")
 
-results = compute_conductance(
-    "cylinder.vtr",
+results = compute_hydraulic_conductance(
+    soln,
     direction="x",
     dx_m=1e-6,
     mu_phys=0.001,
@@ -55,15 +56,17 @@ g_HP = np.pi * R_exact**4 / (8 * mu * L_phys)
 print(f"g_HP) = {g_HP:.4e} m³/(Pa·s)")
 
 # %%
-view = plot_cross_section("cylinder.vtr", direction='x', axis=2)
+view = plot_cross_section(soln, direction='x', axis=2)
 fig, ax = plt.subplots()
 ax.pcolormesh(view/box[..., 30].T, color='k', linewidth=0.4)
 ax.axis('equal')
 ax = add_streamlines(
-    filename="cylinder.vtr", 
+    soln, 
     axis=2, 
     ax=ax, 
     color='white', 
     linewidth=0.5,
     density=1.5,
 )
+
+# %%

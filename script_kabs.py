@@ -1,3 +1,4 @@
+# %%
 import taichi as ti
 import porespy as ps
 from kabs import compute_permeability, solve_flow
@@ -16,7 +17,9 @@ solver = solve_flow(
     tol=1e-3,
 )
 res = compute_permeability(
-    solver._last_vtr,
+    solver,
     direction="x",
 )
 print(f"Kabs = {res['k_lu']:.4f}")
+
+# %%

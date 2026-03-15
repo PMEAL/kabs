@@ -11,13 +11,13 @@ im = ps.generators.cylinders(
     seed=0,
 )
 
-solver = solve_flow(
+soln = solve_flow(
     im=im, 
     direction="x", 
     tol=1e-3,
 )
 res = compute_permeability(
-    solver,
+    soln,
     direction="x",
 )
 print(f"Kabs = {res['k_lu']:.4f}")

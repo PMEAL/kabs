@@ -47,6 +47,32 @@ class FlowResult:
         self.rho = solver.rho.to_numpy()
         self.velocity = solver.v.to_numpy()  # shape (nx, ny, nz, 3)
 
+    @classmethod
+    def from_arrays(cls, solid, rho, velocity, direction=None, nu=None):
+        """Construct a FlowResult directly from numpy arrays (e.g. read from a VTR file).
+
+        Parameters
+        ----------
+        solid : np.ndarray, shape (nx, ny, nz), dtype int8
+            Solid mask: 1 = solid, 0 = pore.
+        rho : np.ndarray, shape (nx, ny, nz), dtype float32
+            Density field.
+        velocity : np.ndarray, shape (nx, ny, nz, 3), dtype float32
+            Velocity field.
+        direction : {'x', 'y', 'z'} or None
+            Flow direction.  Can be supplied later to ``compute_permeability``.
+        nu : float or None
+            Kinematic viscosity in lattice units.  Can be supplied later.
+        """
+        obj = object.__new__(cls)
+        obj.direction = direction
+        obj.nu = nu
+        obj._solver = None
+        obj.solid = solid
+        obj.rho = rho
+        obj.velocity = velocity
+        return obj
+
     def export_to_vtk(self, prefix):
         """Write a VTK Rectilinear Grid (.vtr) file.
 

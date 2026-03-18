@@ -1,10 +1,13 @@
+import math
+
 import numpy as np
 import matplotlib.pyplot as plt
 
 
 __all__ = [
-    'plot_cross_section',
-    'add_streamlines',
+    "plot_cross_section",
+    "add_streamlines",
+    "render_flow",
 ]
 
 
@@ -39,23 +42,23 @@ def plot_cross_section(source, direction="x", axis=2, streamlines=None):
     """
     velocity = source.velocity
 
-    if direction in [0, 'x', 'X']:
+    if direction in [0, "x", "X"]:
         v_dir = 0
         vel = velocity[..., v_dir]
-    elif direction in [1, 'y', 'Y']:
+    elif direction in [1, "y", "Y"]:
         v_dir = 1
         vel = velocity[..., v_dir]
-    elif direction in [2, 'z', 'Z']:
+    elif direction in [2, "z", "Z"]:
         v_dir = 2
         vel = velocity[..., v_dir]
-    elif direction in ['all', 'All', 'ALL', 'None', None, 'none']:
+    elif direction in ["all", "All", "ALL", "None", None, "none"]:
         vel = np.sum(velocity, axis=-1)
     if axis == 0:
-        vx_long = vel[int(vel.shape[0]/2), :, :]
+        vx_long = vel[int(vel.shape[0] / 2), :, :]
     elif axis == 1:
-        vx_long = vel[:, int(vel.shape[1]/2), :].T
+        vx_long = vel[:, int(vel.shape[1] / 2), :].T
     elif axis == 2:
-        vx_long = vel[:, :, int(vel.shape[2]/2)].T
+        vx_long = vel[:, :, int(vel.shape[2] / 2)].T
     return vx_long
 
 
@@ -75,3 +78,137 @@ def add_streamlines(source, ax, axis, **kwargs):
     X, Y = np.meshgrid(np.arange(ncols), np.arange(nrows))
     ax.streamplot(X, Y, U, V, **kwargs)
     return ax
+
+
+def render_flow(
+    result,
+    n_streamlines=200,
+    solid_opacity=0.15,
+    solid_color="dimgray",
+    tube_radius=0.4,
+    cmap="Blues",
+    save=None,
+    show=True,
+    off_screen=False,
+    window_size=(1200, 900),
+):
+    r"""
+    Render a ParaView-style 3D visualisation of the solid structure and flow
+    streamlines.
+
+    Requires ``pyvista`` (``pip install pyvista``).
+
+    Parameters
+    ----------
+    result : FlowResult
+        Converged flow result returned by ``solve_flow()``.
+    n_streamlines : int
+        Number of seed points arranged as a grid on the inlet face.
+        Default 200.
+    solid_opacity : float
+        Opacity of the solid surface mesh (0 = invisible, 1 = fully opaque).
+        Default 0.15.
+    solid_color : str
+        Colour of the solid surface.  Default ``"dimgray"``.
+    tube_radius : float
+        Radius of the streamline tubes in voxel units.  Default 0.4.
+    cmap : str
+        Matplotlib colormap used to colour streamlines by flow speed.
+        Default ``"Blues"``.
+    save : str or None
+        Path at which to save a PNG screenshot.  ``None`` (default) skips saving.
+    show : bool
+        Open an interactive window after rendering.  Default ``True``.
+    off_screen : bool
+        Render without opening a display window (useful on headless servers when
+        ``save`` is set).  Default ``False``.
+    window_size : tuple of int
+        Render-window width × height in pixels.  Default ``(1200, 900)``.
+
+    Returns
+    -------
+    plotter : pyvista.Plotter
+        The configured plotter (already shown/saved if requested).
+    """
+    try:
+        import pyvista as pv
+    except ImportError:
+        raise ImportError(
+            "pyvista is required for render_flow(). "
+            "Install it with:  pip install pyvista"
+        )
+
+    solid = result.solid  # (nx, ny, nz), 1 = solid, 0 = pore (internal convention)
+    velocity = result.velocity  # (nx, ny, nz, 3)
+    direction = result.direction
+    nx, ny, nz = solid.shape
+
+    # --- Build a cell-centred ImageData grid ---
+    # pyvista/VTK flatten order: x varies fastest, which is Fortran order in numpy.
+    grid = pv.ImageData(dimensions=(nx + 1, ny + 1, nz + 1))
+    grid.cell_data["solid"] = solid.flatten(order="F").astype(np.float32)
+
+    speed = np.linalg.norm(velocity, axis=-1)  # (nx, ny, nz)
+    grid.cell_data["speed"] = speed.flatten(order="F").astype(np.float32)
+    grid.cell_data["velocity"] = np.column_stack(
+        [
+            velocity[..., 0].flatten(order="F"),
+            velocity[..., 1].flatten(order="F"),
+            velocity[..., 2].flatten(order="F"),
+        ]
+    ).astype(np.float32)
+
+    # --- Solid surface: threshold to keep solid voxels, then extract faces ---
+    solid_surf = grid.threshold(0.5, scalars="solid").extract_surface()
+
+    # --- Convert to point data so the streamline integrator can interpolate ---
+    grid_pts = grid.cell_data_to_point_data()
+
+    # --- Seed plane just inside the inlet face ---
+    n_side = max(2, int(math.sqrt(n_streamlines)))
+    if direction == "x":
+        center, normal, i_sz, j_sz = (0.5, ny / 2, nz / 2), (1, 0, 0), ny, nz
+    elif direction == "y":
+        center, normal, i_sz, j_sz = (nx / 2, 0.5, nz / 2), (0, 1, 0), nx, nz
+    else:  # z
+        center, normal, i_sz, j_sz = (nx / 2, ny / 2, 0.5), (0, 0, 1), nx, ny
+
+    seed = pv.Plane(
+        center=center,
+        direction=normal,
+        i_size=i_sz * 0.9,
+        j_size=j_sz * 0.9,
+        i_resolution=n_side,
+        j_resolution=n_side,
+    )
+
+    # --- Trace streamlines from the inlet ---
+    streams = grid_pts.streamlines_from_source(
+        seed,
+        vectors="velocity",
+        max_time=float(max(nx, ny, nz)) * 3,
+        integration_direction="forward",
+    )
+
+    # --- Assemble the scene ---
+    pl = pv.Plotter(off_screen=off_screen, window_size=list(window_size))
+    pl.set_background("white")
+
+    pl.add_mesh(
+        solid_surf, color=solid_color, opacity=solid_opacity, smooth_shading=True
+    )
+
+    if streams.n_points > 0:
+        tubes = streams.tube(radius=tube_radius)
+        pl.add_mesh(tubes, scalars="speed", cmap=cmap, show_scalar_bar=False)
+
+    # Camera angle similar to the ParaView default isometric view
+    pl.view_isometric()
+    pl.camera.azimuth += 15
+
+    if save:
+        pl.screenshot(save)
+    if show:
+        pl.show()
+
+    return pl

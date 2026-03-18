@@ -63,8 +63,15 @@ def read_array(raw, binary_start, arrays, name, nx, ny, nz):
     return data
 
 
-def read_flow_vtr(vtr_file, verbose):
-    """Read solid and velocity arrays from a .vtr file. Returns (solid, velocity, nx, ny, nz)."""
+def read_flow_vtr(vtr_file, verbose=False):
+    """Read a flow .vtr file and return a :class:`~kabs.FlowResult`.
+
+    ``direction`` and ``nu`` are not stored in the file and will be ``None``
+    on the returned object; pass them explicitly to ``compute_permeability``
+    if needed.
+    """
+    from kabs._solve_flow import FlowResult
+
     if verbose:
         print(f"Reading {vtr_file} ...")
     with open(vtr_file, "rb") as fh:
@@ -87,7 +94,7 @@ def read_flow_vtr(vtr_file, verbose):
     velocity = read_array(raw, binary_start, arrays, "velocity", nx, ny, nz)
     if verbose:
         print("  Arrays loaded.")
-    return solid, rho, velocity
+    return FlowResult.from_arrays(solid, rho, velocity)
 
 
 def write_flow_vtr(path, result):

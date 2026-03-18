@@ -21,7 +21,7 @@ import re
 
 import numpy as np
 
-from kabs.utils import _parse_xml_arrays, _read_array
+from kabs.utils import parse_xml_arrays, read_array
 
 
 __all__ = ["compute_permeability"]
@@ -42,7 +42,7 @@ def _read_flow_vtr(vtr_file, verbose):
     binary_start = raw.index(b"_", marker) + 1
 
     xml_header = raw[:marker].decode("utf-8", errors="replace")
-    arrays = _parse_xml_arrays(xml_header)
+    arrays = parse_xml_arrays(xml_header)
 
     m = re.search(r'WholeExtent="(\d+) (\d+) (\d+) (\d+) (\d+) (\d+)"', xml_header)
     x0, x1, y0, y1, z0, z1 = (int(v) for v in m.groups())
@@ -50,9 +50,9 @@ def _read_flow_vtr(vtr_file, verbose):
     if verbose:
         print(f"  Grid: {nx} x {ny} x {nz} points")
 
-    solid    = _read_array(raw, binary_start, arrays, "Solid",    nx, ny, nz)
-    rho      = _read_array(raw, binary_start, arrays, "rho",      nx, ny, nz)
-    velocity = _read_array(raw, binary_start, arrays, "velocity", nx, ny, nz)
+    solid    = read_array(raw, binary_start, arrays, "Solid",    nx, ny, nz)
+    rho      = read_array(raw, binary_start, arrays, "rho",      nx, ny, nz)
+    velocity = read_array(raw, binary_start, arrays, "velocity", nx, ny, nz)
     if verbose:
         print("  Arrays loaded.")
     return solid, rho, velocity

@@ -21,7 +21,7 @@ import re
 
 import numpy as np
 
-from tools.vtr_io import _parse_xml_arrays, _read_array
+from kabs.utils import _parse_xml_arrays, _read_array
 
 
 __all__ = ["compute_permeability"]
@@ -160,20 +160,10 @@ def compute_permeability(
         k_m2       – permeability in m²  (None if dx_m is None)
         k_mD       – permeability in milliDarcy  (None if dx_m is None)
     """
-    from ._solve_flow import FlowResult
-
-    if isinstance(source, FlowResult):
-        _dir = direction if direction is not None else source.direction
-        _nu  = nu        if nu        is not None else source.nu
-        solid    = source.solid
-        velocity = source.velocity
-    else:
-        _dir = direction if direction is not None else "x"
-        _nu  = nu        if nu        is not None else 1.0 / 6.0
-        _dir = _dir.lower()
-        if _dir not in ("x", "y", "z"):
-            raise ValueError(f"direction must be 'x', 'y', or 'z', got {_dir!r}")
-        solid, _rho, velocity = _read_flow_vtr(source, verbose)
+    _dir = direction if direction is not None else source.direction
+    _nu  = nu        if nu        is not None else source.nu
+    solid    = source.solid
+    velocity = source.velocity
 
     _dir = _dir.lower()
     if _dir not in ("x", "y", "z"):

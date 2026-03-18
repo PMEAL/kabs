@@ -1,8 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from tools.vtr_io import vtr_to_array
-
 
 __all__ = [
     'plot_cross_section',
@@ -39,11 +37,7 @@ def plot_cross_section(source, direction="x", axis=2, streamlines=None):
     velocity : ndarray
         A 2D array with voxel value corresponding to the velocity.
     """
-    from ._solve_flow import FlowResult
-    if isinstance(source, FlowResult):
-        velocity = source.velocity
-    else:
-        velocity = vtr_to_array(source)
+    velocity = source.velocity
 
     if direction in [0, 'x', 'X']:
         v_dir = 0
@@ -62,16 +56,11 @@ def plot_cross_section(source, direction="x", axis=2, streamlines=None):
         vx_long = vel[:, int(vel.shape[1]/2), :].T
     elif axis == 2:
         vx_long = vel[:, :, int(vel.shape[2]/2)].T
-
     return vx_long
 
 
 def add_streamlines(source, ax, axis, **kwargs):
-    from ._solve_flow import FlowResult
-    if isinstance(source, FlowResult):
-        velocity = source.velocity
-    else:
-        velocity = vtr_to_array(source)
+    velocity = source.velocity
     mid = [int(s / 2) for s in velocity.shape[:3]]
     if axis == 0:
         U = velocity[mid[0], :, :, 1]

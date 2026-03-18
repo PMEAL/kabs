@@ -37,7 +37,7 @@ import re
 import numpy as np
 
 # Import the shared VTR parsing helpers from the permeability module.
-from tools.vtr_io import _parse_xml_arrays, _read_array
+from kabs.utils import _parse_xml_arrays, _read_array
 
 
 __all__ = ["compute_hydraulic_conductance"]
@@ -120,17 +120,10 @@ def compute_hydraulic_conductance(
         dP_Pa      – total pressure drop in Pa       (None if dx_m/mu_phys not given)
         g_SI       – conductance in m^3/(Pa·s)       (None if dx_m/mu_phys not given)
     """
-    from ._solve_flow import FlowResult
-
-    if isinstance(source, FlowResult):
-        _dir = direction if direction is not None else source.direction
-        _nu  = nu        if nu        is not None else source.nu
-        solid    = source.solid
-        velocity = source.velocity
-    else:
-        _dir = direction if direction is not None else "x"
-        _nu  = nu        if nu        is not None else 1.0 / 6.0
-        solid, velocity = _read_flow_vtr(source, verbose)
+    _dir = direction if direction is not None else source.direction
+    _nu  = nu        if nu        is not None else source.nu
+    solid    = source.solid
+    velocity = source.velocity
 
     _dir = _dir.lower()
     if _dir not in ("x", "y", "z"):

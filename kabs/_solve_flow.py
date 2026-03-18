@@ -5,13 +5,14 @@ import time
 import numpy as np
 
 from ._single_phase_solver import SinglePhaseSolver
+from .utils import write_flow_vtr
 
 
 __all__ = ["solve_flow", "FlowResult"]
 
 # Pressure BCs are hardcoded: only the difference matters for Darcy's law,
 # and both u_D and gradP scale with Δρ so they cancel in k = u_D*mu/gradP.
-_RHO_IN  = 1.00
+_RHO_IN = 1.00
 _RHO_OUT = 0.99
 
 _BC_SETTERS = {
@@ -42,9 +43,9 @@ class FlowResult:
         self.direction = direction
         self.nu = nu
         self._solver = solver
-        self.solid    = solver.solid.to_numpy()
-        self.rho      = solver.rho.to_numpy()
-        self.velocity = solver.v.to_numpy()   # shape (nx, ny, nz, 3)
+        self.solid = solver.solid.to_numpy()
+        self.rho = solver.rho.to_numpy()
+        self.velocity = solver.v.to_numpy()  # shape (nx, ny, nz, 3)
 
     def export_to_vtk(self, prefix):
         """Write a VTK Rectilinear Grid (.vtr) file.
@@ -54,7 +55,7 @@ class FlowResult:
         prefix : str
             Output path without extension (pyevtk appends ``.vtr``).
         """
-        self._solver.export_VTK(prefix)
+        write_flow_vtr(prefix, self)
 
 
 def solve_flow(
@@ -158,7 +159,7 @@ def solve_flow(
 
             v_now = solver.v.to_numpy()
             if v_prev is not None:
-                v_total  = np.sum(np.abs(v_now))
+                v_total = np.sum(np.abs(v_now))
                 v_change = np.sum(np.abs(v_now - v_prev))
                 if verbose:
                     print(f"         |v|={v_total:.4e}  delta|v|={v_change:.4e}")
@@ -166,7 +167,7 @@ def solve_flow(
                     if verbose:
                         print(
                             f"Converged at step {i} "
-                            f"(delta|v|/|v| = {v_change/v_total:.2e} < tol={tol:.2e})"
+                            f"(delta|v|/|v| = {v_change / v_total:.2e} < tol={tol:.2e})"
                         )
                     final_step = i
                     break

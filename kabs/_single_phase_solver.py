@@ -9,9 +9,9 @@ __all__ = [
 
 
 bc_defs = {
-    'periodic': 0,
-    'pressure': 1,
-    'velocity': 2,
+    "periodic": 0,
+    "pressure": 1,
+    "velocity": 2,
 }
 
 
@@ -20,7 +20,7 @@ class SinglePhaseSolver:
     def __init__(self, im, sparse_storage=False):
         self.enable_projection = True
         self.sparse_storage = sparse_storage
-        object.__setattr__(self, '_last_vtr', None)
+        object.__setattr__(self, "_last_vtr", None)
 
         nx, ny, nz = im.shape
         self.nx, self.ny, self.nz = nx, ny, nz
@@ -83,8 +83,12 @@ class SinglePhaseSolver:
         self.vz_bczr = 0.0
 
         if self.sparse_storage == False:
-            self.f = ti.Vector.field(19, ti.f32, shape=(nx, ny, nz), layout=ti.Layout.SOA)
-            self.F = ti.Vector.field(19, ti.f32, shape=(nx, ny, nz), layout=ti.Layout.SOA)
+            self.f = ti.Vector.field(
+                19, ti.f32, shape=(nx, ny, nz), layout=ti.Layout.SOA
+            )
+            self.F = ti.Vector.field(
+                19, ti.f32, shape=(nx, ny, nz), layout=ti.Layout.SOA
+            )
             self.rho = ti.field(ti.f32, shape=(nx, ny, nz))
             self.v = ti.Vector.field(3, ti.f32, shape=(nx, ny, nz))
         else:
@@ -279,7 +283,7 @@ class SinglePhaseSolver:
 
     @ti.func
     def meq_vec(self, rho_local, u):
-        out = ti.Vector([0.0]*19)
+        out = ti.Vector([0.0] * 19)
         out[0] = rho_local
         out[3] = u[0]
         out[5] = u[1]
@@ -366,9 +370,7 @@ class SinglePhaseSolver:
             for j, k in ti.ndrange((0, self.ny), (0, self.nz)):
                 if self.solid[0, j, k] == 0:
                     for s in ti.static(range(19)):
-                        self.F[0, j, k][s] = self.feq(
-                            s, self.rho_bcxl, self.v[1, j, k]
-                        )
+                        self.F[0, j, k][s] = self.feq(s, self.rho_bcxl, self.v[1, j, k])
 
         if ti.static(self.bc_x_left == 2):
             for j, k in ti.ndrange((0, self.ny), (0, self.nz)):
@@ -399,9 +401,7 @@ class SinglePhaseSolver:
             for i, k in ti.ndrange((0, self.nx), (0, self.nz)):
                 if self.solid[i, 0, k] == 0:
                     for s in ti.static(range(19)):
-                        self.F[i, 0, k][s] = self.feq(
-                            s, self.rho_bcyl, self.v[i, 1, k]
-                        )
+                        self.F[i, 0, k][s] = self.feq(s, self.rho_bcyl, self.v[i, 1, k])
 
         if ti.static(self.bc_y_left == 2):
             for i, k in ti.ndrange((0, self.nx), (0, self.nz)):
@@ -432,9 +432,7 @@ class SinglePhaseSolver:
             for i, j in ti.ndrange((0, self.nx), (0, self.ny)):
                 if self.solid[i, j, 0] == 0:
                     for s in ti.static(range(19)):
-                        self.F[i, j, 0][s] = self.feq(
-                            s, self.rho_bczl, self.v[i, j, 1]
-                        )
+                        self.F[i, j, 0][s] = self.feq(s, self.rho_bczl, self.v[i, j, 1])
 
         if ti.static(self.bc_z_left == 2):
             for i, j in ti.ndrange((0, self.nx), (0, self.ny)):
@@ -560,6 +558,7 @@ class SinglePhaseSolver:
         self.fz = force[2]
 
     def export_VTK(self, path):
+        v = self.v.to_numpy()
         gridToVTK(
             path,
             self.x,
@@ -569,15 +568,9 @@ class SinglePhaseSolver:
                 "Solid": np.ascontiguousarray(self.solid.to_numpy()),
                 "rho": np.ascontiguousarray(self.rho.to_numpy()),
                 "velocity": (
-                    np.ascontiguousarray(
-                        self.v.to_numpy()[..., 0]
-                    ),
-                    np.ascontiguousarray(
-                        self.v.to_numpy()[..., 1]
-                    ),
-                    np.ascontiguousarray(
-                        self.v.to_numpy()[..., 2]
-                    ),
+                    np.ascontiguousarray(v[..., 0]),
+                    np.ascontiguousarray(v[..., 1]),
+                    np.ascontiguousarray(v[..., 2]),
                 ),
             },
         )

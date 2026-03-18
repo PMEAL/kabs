@@ -15,11 +15,7 @@ Result is in lattice units (voxels^2).  Multiply by dx_m**2 to get m^2,
 then divide by 9.869e-16 to get milliDarcy.
 """
 
-import re
-
 import numpy as np
-
-from kabs.utils import parse_xml_arrays, read_array
 
 
 __all__ = ["compute_permeability"]

@@ -15,6 +15,7 @@ __all__ = [
     "read_flow_vtr",
 ]
 
+
 def parse_xml_arrays(xml):
     """Return a dict of {name: (offset, dtype, n_components)} from a VTK XML header."""
     arrays = {}
@@ -46,9 +47,11 @@ def read_array(raw, binary_start, arrays, name, nx, ny, nz):
     offset, dtype, n_comp = arrays[name]
     pos = binary_start + offset
     # 8-byte UInt64 header = number of *bytes* in this array
-    n_bytes, = struct.unpack_from("<Q", raw, pos)
+    (n_bytes,) = struct.unpack_from("<Q", raw, pos)
     pos += 8
-    data = np.frombuffer(raw, dtype=dtype, count=n_bytes // dtype().itemsize, offset=pos)
+    data = np.frombuffer(
+        raw, dtype=dtype, count=n_bytes // dtype().itemsize, offset=pos
+    )
     if n_comp > 1:
         data_pts = data.reshape(nx * ny * nz, n_comp)
         data = np.stack(
@@ -108,8 +111,8 @@ def read_flow_vtr(vtr_file, verbose):
     if verbose:
         print(f"  Grid: {nx} x {ny} x {nz} points")
 
-    solid    = read_array(raw, binary_start, arrays, "Solid",    nx, ny, nz)
-    rho      = read_array(raw, binary_start, arrays, "rho",      nx, ny, nz)
+    solid = read_array(raw, binary_start, arrays, "Solid", nx, ny, nz)
+    rho = read_array(raw, binary_start, arrays, "rho", nx, ny, nz)
     velocity = read_array(raw, binary_start, arrays, "velocity", nx, ny, nz)
     if verbose:
         print("  Arrays loaded.")

@@ -12,6 +12,7 @@ __all__ = [
     "parse_xml_arrays",
     "read_array",
     "vtr_to_array",
+    "read_flow_vtr",
 ]
 
 def parse_xml_arrays(xml):
@@ -86,3 +87,30 @@ def vtr_to_array(filename, array_name="velocity"):
     x0, x1, y0, y1, z0, z1 = (int(v) for v in m.groups())
     nx, ny, nz = x1 - x0 + 1, y1 - y0 + 1, z1 - z0 + 1
     return read_array(raw, binary_start, arrays, array_name, nx, ny, nz)
+
+
+def read_flow_vtr(vtr_file, verbose):
+    """Read solid and velocity arrays from a .vtr file. Returns (solid, velocity, nx, ny, nz)."""
+    if verbose:
+        print(f"Reading {vtr_file} ...")
+    with open(vtr_file, "rb") as fh:
+        raw = fh.read()
+
+    marker = raw.index(b'<AppendedData encoding="raw">')
+    binary_start = raw.index(b"_", marker) + 1
+
+    xml_header = raw[:marker].decode("utf-8", errors="replace")
+    arrays = parse_xml_arrays(xml_header)
+
+    m = re.search(r'WholeExtent="(\d+) (\d+) (\d+) (\d+) (\d+) (\d+)"', xml_header)
+    x0, x1, y0, y1, z0, z1 = (int(v) for v in m.groups())
+    nx, ny, nz = x1 - x0 + 1, y1 - y0 + 1, z1 - z0 + 1
+    if verbose:
+        print(f"  Grid: {nx} x {ny} x {nz} points")
+
+    solid    = read_array(raw, binary_start, arrays, "Solid",    nx, ny, nz)
+    rho      = read_array(raw, binary_start, arrays, "rho",      nx, ny, nz)
+    velocity = read_array(raw, binary_start, arrays, "velocity", nx, ny, nz)
+    if verbose:
+        print("  Arrays loaded.")
+    return solid, rho, velocity

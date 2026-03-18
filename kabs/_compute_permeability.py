@@ -1,9 +1,7 @@
 """
 Compute Darcy permeability from LBM single-phase simulation output.
 
-Accepts either a ``FlowResult`` object (returned by ``solve_flow``) or a path
-to a .vtr file written by pyevtk.  When passed a ``FlowResult`` the VTR
-round-trip is skipped entirely.
+Accepts a ``FlowResult`` object returned by ``solve_flow``.
 
 Darcy's Law:  k = u_D * mu / |dP/dL|
 
@@ -29,33 +27,6 @@ __all__ = ["compute_permeability"]
 
 _RHO_IN  = 1.00
 _RHO_OUT = 0.99
-
-
-def _read_flow_vtr(vtr_file, verbose):
-    """Read solid and velocity arrays from a .vtr file. Returns (solid, velocity, nx, ny, nz)."""
-    if verbose:
-        print(f"Reading {vtr_file} ...")
-    with open(vtr_file, "rb") as fh:
-        raw = fh.read()
-
-    marker = raw.index(b'<AppendedData encoding="raw">')
-    binary_start = raw.index(b"_", marker) + 1
-
-    xml_header = raw[:marker].decode("utf-8", errors="replace")
-    arrays = parse_xml_arrays(xml_header)
-
-    m = re.search(r'WholeExtent="(\d+) (\d+) (\d+) (\d+) (\d+) (\d+)"', xml_header)
-    x0, x1, y0, y1, z0, z1 = (int(v) for v in m.groups())
-    nx, ny, nz = x1 - x0 + 1, y1 - y0 + 1, z1 - z0 + 1
-    if verbose:
-        print(f"  Grid: {nx} x {ny} x {nz} points")
-
-    solid    = read_array(raw, binary_start, arrays, "Solid",    nx, ny, nz)
-    rho      = read_array(raw, binary_start, arrays, "rho",      nx, ny, nz)
-    velocity = read_array(raw, binary_start, arrays, "velocity", nx, ny, nz)
-    if verbose:
-        print("  Arrays loaded.")
-    return solid, rho, velocity
 
 
 def _compute_permeability_core(solid, velocity, direction, nu, dx_m, verbose):
@@ -132,18 +103,14 @@ def compute_permeability(
 
     Parameters
     ----------
-    source : FlowResult or str/path-like
-        Either a ``FlowResult`` returned by ``solve_flow()``, or a path to a
-        ``.vtr`` file written by ``SinglePhaseSolver.export_VTK()``.
-        When a ``FlowResult`` is given, ``direction`` and ``nu`` default to the
-        values stored in the result.
+    source : FlowResult
+        A ``FlowResult`` returned by ``solve_flow()``.  ``direction`` and
+        ``nu`` default to the values stored in the result.
     direction : {'x', 'y', 'z'} or None
-        Flow direction.  If *None* and ``source`` is a ``FlowResult``, the
-        direction is taken from ``source.direction``; otherwise defaults to
-        ``'x'``.
+        Flow direction.  If *None*, taken from ``source.direction``.
     nu : float or None
-        Kinematic viscosity in lattice units.  If *None* and ``source`` is a
-        ``FlowResult``, taken from ``source.nu``; otherwise defaults to 1/6.
+        Kinematic viscosity in lattice units.  If *None*, taken from
+        ``source.nu``.
     dx_m : float or None
         Physical voxel size in metres.  If given, results are also reported
         in m² and milliDarcy.  E.g. ``dx_m=2.85e-6`` for a 2.85-µm scan.

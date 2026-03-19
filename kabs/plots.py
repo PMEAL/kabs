@@ -82,6 +82,7 @@ def add_streamlines(source, ax, axis, **kwargs):
 
 def render_flow(
     result,
+    direction=None,
     n_streamlines=200,
     solid_opacity=0.15,
     solid_color="dimgray",
@@ -101,7 +102,13 @@ def render_flow(
     Parameters
     ----------
     result : FlowResult
-        Converged flow result returned by ``solve_flow()``.
+        Converged flow result returned by ``solve_flow()`` or
+        ``read_flow_vtr()``.
+    direction : {'x', 'y', 'z'} or None
+        Flow direction used to place inlet seed points.  If ``None``
+        (default), taken from ``result.direction``.  Must be provided
+        explicitly when ``result`` was loaded from a VTR file (which does
+        not store the direction).
     n_streamlines : int
         Number of seed points arranged as a grid on the inlet face.
         Default 200.
@@ -140,7 +147,12 @@ def render_flow(
 
     solid = result.solid  # (nx, ny, nz), 1 = solid, 0 = pore (internal convention)
     velocity = result.velocity  # (nx, ny, nz, 3)
-    direction = result.direction
+    direction = direction if direction is not None else result.direction
+    if direction is None:
+        raise ValueError(
+            "Flow direction is not stored in the result. "
+            "Pass it explicitly: render_flow(result, direction='x')"
+        )
     nx, ny, nz = solid.shape
 
     # --- Build a cell-centred ImageData grid ---
@@ -164,23 +176,20 @@ def render_flow(
     # --- Convert to point data so the streamline integrator can interpolate ---
     grid_pts = grid.cell_data_to_point_data()
 
-    # --- Seed plane just inside the inlet face ---
+    # --- Seed points uniformly covering the inlet face ---
     n_side = max(2, int(math.sqrt(n_streamlines)))
+    margin = 0.05  # stay slightly inside the domain boundary
+    a = np.linspace(0 + margin, 1 - margin, n_side)
+    b = np.linspace(0 + margin, 1 - margin, n_side)
+    aa, bb = np.meshgrid(a, b)
+    aa, bb = aa.ravel(), bb.ravel()
     if direction == "x":
-        center, normal, i_sz, j_sz = (0.5, ny / 2, nz / 2), (1, 0, 0), ny, nz
+        pts = np.column_stack([np.full_like(aa, 0.5), aa * ny, bb * nz])
     elif direction == "y":
-        center, normal, i_sz, j_sz = (nx / 2, 0.5, nz / 2), (0, 1, 0), nx, nz
+        pts = np.column_stack([aa * nx, np.full_like(aa, 0.5), bb * nz])
     else:  # z
-        center, normal, i_sz, j_sz = (nx / 2, ny / 2, 0.5), (0, 0, 1), nx, ny
-
-    seed = pv.Plane(
-        center=center,
-        direction=normal,
-        i_size=i_sz * 0.9,
-        j_size=j_sz * 0.9,
-        i_resolution=n_side,
-        j_resolution=n_side,
-    )
+        pts = np.column_stack([aa * nx, bb * ny, np.full_like(aa, 0.5)])
+    seed = pv.PolyData(pts.astype(np.float32))
 
     # --- Trace streamlines from the inlet ---
     streams = grid_pts.streamlines_from_source(

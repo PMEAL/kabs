@@ -39,13 +39,43 @@ def test_read_returns_flow_result(tmp_path, small_result):
     assert isinstance(soln, FlowResult)
 
 
-def test_read_direction_and_nu_are_none(tmp_path, small_result):
-    """direction and nu are not stored in the VTR file and should be None."""
+def test_read_direction_and_nu_none_when_absent(tmp_path, small_result):
+    """direction and nu are None when the result had none to begin with."""
     prefix = str(tmp_path / "test")
     write_flow_vtr(prefix, small_result)
     soln = read_flow_vtr(prefix + ".vtr")
     assert soln.direction is None
     assert soln.nu is None
+
+
+@pytest.mark.parametrize("direction", ["x", "y", "z"])
+def test_roundtrip_direction(tmp_path, direction):
+    """direction is preserved through write/read when present on the result."""
+    result = FlowResult.from_arrays(
+        solid=np.zeros((4, 4, 4), dtype=np.int8),
+        rho=np.ones((4, 4, 4), dtype=np.float32),
+        velocity=np.zeros((4, 4, 4, 3), dtype=np.float32),
+        direction=direction,
+    )
+    prefix = str(tmp_path / "test")
+    write_flow_vtr(prefix, result)
+    soln = read_flow_vtr(prefix + ".vtr")
+    assert soln.direction == direction
+
+
+def test_roundtrip_nu(tmp_path):
+    """nu is preserved through write/read when present on the result."""
+    nu = 1.0 / 6.0
+    result = FlowResult.from_arrays(
+        solid=np.zeros((4, 4, 4), dtype=np.int8),
+        rho=np.ones((4, 4, 4), dtype=np.float32),
+        velocity=np.zeros((4, 4, 4, 3), dtype=np.float32),
+        nu=nu,
+    )
+    prefix = str(tmp_path / "test")
+    write_flow_vtr(prefix, result)
+    soln = read_flow_vtr(prefix + ".vtr")
+    assert soln.nu == pytest.approx(nu)
 
 
 # ---------------------------------------------------------------------------

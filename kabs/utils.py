@@ -63,12 +63,30 @@ def read_array(raw, binary_start, arrays, name, nx, ny, nz):
     return data
 
 
+_META_RE = re.compile(r"<!--\s*kabs-meta\s+(.*?)\s*-->", re.DOTALL)
+
+
+def _parse_meta_comment(xml_header):
+    """Extract direction and nu from a kabs-meta comment, if present."""
+    m = _META_RE.search(xml_header)
+    if not m:
+        return None, None
+    body = m.group(1)
+    direction = nu = None
+    dm = re.search(r'direction="([xyz])"', body)
+    nm = re.search(r'nu="([^"]+)"', body)
+    if dm:
+        direction = dm.group(1)
+    if nm:
+        nu = float(nm.group(1))
+    return direction, nu
+
+
 def read_flow_vtr(vtr_file, verbose=False):
     """Read a flow .vtr file and return a :class:`~kabs.FlowResult`.
 
-    ``direction`` and ``nu`` are not stored in the file and will be ``None``
-    on the returned object; pass them explicitly to ``compute_permeability``
-    if needed.
+    ``direction`` and ``nu`` are restored from the file when the file was
+    written by :func:`write_flow_vtr` with a ``FlowResult`` that carried them.
     """
     from kabs._solve_flow import FlowResult
 
@@ -92,9 +110,10 @@ def read_flow_vtr(vtr_file, verbose=False):
     solid = read_array(raw, binary_start, arrays, "Solid", nx, ny, nz)
     rho = read_array(raw, binary_start, arrays, "rho", nx, ny, nz)
     velocity = read_array(raw, binary_start, arrays, "velocity", nx, ny, nz)
+    direction, nu = _parse_meta_comment(xml_header)
     if verbose:
         print("  Arrays loaded.")
-    return FlowResult.from_arrays(solid, rho, velocity)
+    return FlowResult.from_arrays(solid, rho, velocity, direction=direction, nu=nu)
 
 
 def write_flow_vtr(path, result):
@@ -106,6 +125,7 @@ def write_flow_vtr(path, result):
         Output path without extension (pyevtk appends ``.vtr``).
     result : FlowResult
         A converged flow result containing ``solid``, ``rho``, and ``velocity``.
+        ``direction`` and ``nu`` are embedded as a metadata comment when present.
     """
     from pyevtk.hl import gridToVTK
 
@@ -128,3 +148,22 @@ def write_flow_vtr(path, result):
             ),
         },
     )
+
+    # Embed direction and nu as a comment in the XML header so they survive
+    # the write/read round-trip.
+    direction = getattr(result, "direction", None)
+    nu = getattr(result, "nu", None)
+    if direction is not None or nu is not None:
+        attrs = []
+        if direction is not None:
+            attrs.append(f'direction="{direction}"')
+        if nu is not None:
+            attrs.append(f'nu="{nu}"')
+        comment = f"<!-- kabs-meta {' '.join(attrs)} -->\n".encode()
+        vtr_path = path + ".vtr"
+        with open(vtr_path, "rb") as fh:
+            data = fh.read()
+        first_newline = data.index(b"\n")
+        data = data[: first_newline + 1] + comment + data[first_newline + 1 :]
+        with open(vtr_path, "wb") as fh:
+            fh.write(data)

@@ -2,7 +2,7 @@
 import taichi as ti
 import porespy as ps
 from kabs import (
-    compute_permeability, 
+    compute_permeability,
     solve_flow,
 )
 from kabs.utils import (
@@ -16,12 +16,13 @@ from kabs.plots import (
 # %%
 ti.init(arch=ti.cpu)
 im = ps.generators.cylinders(
-    shape=[100, 100, 100], 
+    shape=[100, 100, 100],
     r=4,
     porosity=0.7,
     seed=0,
 )
 
+# %%
 soln = solve_flow(
     im=im,
     direction="x",
@@ -34,10 +35,10 @@ res = compute_permeability(
 print(f"Kabs = {res['k_lu']:.4f}")
 
 # %%
-write_flow_vtr('results', soln)
+write_flow_vtr("results", soln)
 
 # %%
-soln = read_flow_vtr('results.vtr', verbose=False)
+soln = read_flow_vtr("results.vtr", verbose=False)
 fig = render_flow(soln, show=False, off_screen=True, save="flow.png")
 fig.show()
 

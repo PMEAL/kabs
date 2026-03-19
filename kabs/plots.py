@@ -91,7 +91,7 @@ def render_flow(
     save=None,
     show=True,
     off_screen=False,
-    window_size=(1200, 900),
+    window_size=(800, 600),
 ):
     r"""
     Render a ParaView-style 3D visualisation of the solid structure and flow
@@ -104,11 +104,6 @@ def render_flow(
     result : FlowResult
         Converged flow result returned by ``solve_flow()`` or
         ``read_flow_vtr()``.
-    direction : {'x', 'y', 'z'} or None
-        Flow direction used to place inlet seed points.  If ``None``
-        (default), taken from ``result.direction``.  Must be provided
-        explicitly when ``result`` was loaded from a VTR file (which does
-        not store the direction).
     n_streamlines : int
         Number of seed points arranged as a grid on the inlet face.
         Default 200.
@@ -130,7 +125,7 @@ def render_flow(
         Render without opening a display window (useful on headless servers when
         ``save`` is set).  Default ``False``.
     window_size : tuple of int
-        Render-window width × height in pixels.  Default ``(1200, 900)``.
+        Render-window width × height in pixels.  Default ``(800, 600)``.
 
     Returns
     -------
@@ -147,12 +142,7 @@ def render_flow(
 
     solid = result.solid  # (nx, ny, nz), 1 = solid, 0 = pore (internal convention)
     velocity = result.velocity  # (nx, ny, nz, 3)
-    direction = direction if direction is not None else result.direction
-    if direction is None:
-        raise ValueError(
-            "Flow direction is not stored in the result. "
-            "Pass it explicitly: render_flow(result, direction='x')"
-        )
+    direction = result.direction
     nx, ny, nz = solid.shape
 
     # --- Build a cell-centred ImageData grid ---
@@ -171,7 +161,7 @@ def render_flow(
     ).astype(np.float32)
 
     # --- Solid surface: threshold to keep solid voxels, then extract faces ---
-    solid_surf = grid.threshold(0.5, scalars="solid").extract_surface()
+    solid_surf = grid.threshold(0.5, scalars="solid").extract_surface(algorithm='dataset_surface')
 
     # --- Convert to point data so the streamline integrator can interpolate ---
     grid_pts = grid.cell_data_to_point_data()
@@ -195,7 +185,7 @@ def render_flow(
     streams = grid_pts.streamlines_from_source(
         seed,
         vectors="velocity",
-        max_time=float(max(nx, ny, nz)) * 3,
+        # max_time=float(max(nx, ny, nz)) * 3,
         integration_direction="forward",
     )
 

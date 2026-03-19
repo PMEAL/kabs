@@ -1,6 +1,7 @@
 # %%
 import taichi as ti
 import porespy as ps
+import matplotlib.pyplot as plt
 
 import kabs
 
@@ -30,7 +31,7 @@ kabs.utils.write_flow_vtr("results", soln)
 
 # %%
 soln = kabs.utils.read_flow_vtr("results.vtr", verbose=False)
-fig = kabs.plots.render_flow(soln, show=False, off_screen=False, save=None)
+fig = kabs.plots.render_flow(soln, cmap=plt.cm.turbo, show=False, off_screen=False, save=None)
 fig.show()
 
 # %%

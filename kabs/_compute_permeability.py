@@ -80,11 +80,11 @@ def _compute_permeability_core(solid, velocity, direction, nu, dx_m, verbose):
 
     return {
         "porosity": float(porosity),
-        "u_darcy":  u_darcy,
-        "u_pore":   u_pore,
-        "k_lu":     k_lu,
-        "k_m2":     k_m2,
-        "k_mD":     k_mD,
+        "u_darcy": u_darcy,
+        "u_pore": u_pore,
+        "k_lu": k_lu,
+        "k_m2": k_m2,
+        "k_mD": k_mD,
     }
 
 

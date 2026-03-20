@@ -85,48 +85,65 @@ _SOLVE_KW = dict(
 )
 
 
-@pytest.fixture(scope="module")
-def bundle_result():
-    """Converged LBM solution for the 4-tube bundle (R=10, L=30, 50×50 cross-section)."""
-    return solve_flow(_bundle_image(), **_SOLVE_KW)
+class TestBundlePermeability:
+    @classmethod
+    def setup_class(cls):
+        cls.result = solve_flow(_bundle_image(), **_SOLVE_KW)
+
+    def test_permeability_vs_analytical(self):
+        """k_lu must match the bundle-of-tubes analytical formula within 7 %.
+
+        The remaining error after the R_eff = R + 0.5 bounce-back correction is
+        due to the discrete voxelisation of the circular boundaries.
+        """
+        out = compute_permeability(self.result, verbose=False)
+        assert out["k_lu"] == pytest.approx(_k_analytical(), rel=0.07)
+
+    def test_permeability_positive(self):
+        out = compute_permeability(self.result, verbose=False)
+        assert out["k_lu"] > 0.0
+
+    def test_darcy_velocity_positive(self):
+        """Pressure gradient must drive flow in the positive x direction."""
+        out = compute_permeability(self.result, verbose=False)
+        assert out["u_darcy"] > 0.0
+
+    def test_no_physical_units_without_dx(self):
+        """k_m2 and k_mD must be None when dx_m is not supplied."""
+        out = compute_permeability(self.result, verbose=False)
+        assert out["k_m2"] is None
+        assert out["k_mD"] is None
+
+    def test_physical_units_with_dx(self):
+        """Supplying dx_m must populate k_m2 and k_mD consistently."""
+        dx = 1e-6  # 1 µm voxels
+        out = compute_permeability(self.result, dx_m=dx, verbose=False)
+        assert out["k_m2"] == pytest.approx(out["k_lu"] * dx**2, rel=1e-6)
+        assert out["k_mD"] == pytest.approx(out["k_m2"] / 9.869233e-16, rel=1e-6)
 
 
 # ---------------------------------------------------------------------------
-# Tests
+# Manual runner ("Run file in interactive window")
 # ---------------------------------------------------------------------------
 
+if __name__ == "__main__":
+    import inspect
+    import taichi as ti
 
-def test_bundle_permeability_vs_analytical(bundle_result):
-    """k_lu must match the bundle-of-tubes analytical formula within 7 %.
+    ti.init(arch=ti.cpu)
 
-    The remaining error after the R_eff = R + 0.5 bounce-back correction is
-    due to the discrete voxelisation of the circular boundaries.
-    """
-    out = compute_permeability(bundle_result, verbose=False)
-    assert out["k_lu"] == pytest.approx(_k_analytical(), rel=0.07)
-
-
-def test_bundle_permeability_positive(bundle_result):
-    out = compute_permeability(bundle_result, verbose=False)
-    assert out["k_lu"] > 0.0
-
-
-def test_bundle_darcy_velocity_positive(bundle_result):
-    """Pressure gradient must drive flow in the positive x direction."""
-    out = compute_permeability(bundle_result, verbose=False)
-    assert out["u_darcy"] > 0.0
-
-
-def test_bundle_no_physical_units_without_dx(bundle_result):
-    """k_m2 and k_mD must be None when dx_m is not supplied."""
-    out = compute_permeability(bundle_result, verbose=False)
-    assert out["k_m2"] is None
-    assert out["k_mD"] is None
-
-
-def test_bundle_physical_units_with_dx(bundle_result):
-    """Supplying dx_m must populate k_m2 and k_mD consistently."""
-    dx = 1e-6  # 1 µm voxels
-    out = compute_permeability(bundle_result, dx_m=dx, verbose=False)
-    assert out["k_m2"] == pytest.approx(out["k_lu"] * dx**2, rel=1e-6)
-    assert out["k_mD"] == pytest.approx(out["k_m2"] / 9.869233e-16, rel=1e-6)
+    for cls_name, cls in inspect.getmembers(
+        inspect.getmodule(lambda: None), inspect.isclass
+    ):
+        if not cls_name.startswith("Test"):
+            continue
+        cls.setup_class()
+        obj = cls()
+        for name in sorted(dir(obj)):
+            if not name.startswith("test_"):
+                continue
+            try:
+                getattr(obj, name)()
+                print(f"{cls_name}.{name}: passed")
+            except Exception as e:
+                print(f"{cls_name}.{name}: FAILED — {e}")

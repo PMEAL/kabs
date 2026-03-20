@@ -112,32 +112,29 @@ _SOLVE_KW = dict(
 _R = 10
 
 
-@pytest.fixture(scope="module")
-def cylinder_result():
-    """Converged LBM solution for a cylindrical tube (R=10, L=30)."""
-    return solve_flow(_cylinder_image(_R), **_SOLVE_KW)
+class TestCylinderConductance:
+    @classmethod
+    def setup_class(cls):
+        cls.result = solve_flow(_cylinder_image(_R), **_SOLVE_KW)
 
+    def test_conductance_vs_hagen_poiseuille(self):
+        """LBM g_lu must match HP(R_eff) within 7 %.
 
-def test_cylinder_conductance_vs_hagen_poiseuille(cylinder_result):
-    """LBM g_lu must match HP(R_eff) within 7 %.
+        Midpoint bounce-back shifts the effective wall by +0.5 voxels, so we
+        compare against HP with R_eff = R + 0.5 = 10.5.
+        """
+        out = compute_hydraulic_conductance(self.result, verbose=False)
+        g_expected = _g_cylinder(r=_R + 0.5)
+        assert out["g_lu"] == pytest.approx(g_expected, rel=0.07)
 
-    Midpoint bounce-back shifts the effective wall by +0.5 voxels, so we
-    compare against HP with R_eff = R + 0.5 = 10.5.
-    """
-    out = compute_hydraulic_conductance(cylinder_result, verbose=False)
-    g_expected = _g_cylinder(r=_R + 0.5)
-    assert out["g_lu"] == pytest.approx(g_expected, rel=0.07)
+    def test_conductance_positive(self):
+        out = compute_hydraulic_conductance(self.result, verbose=False)
+        assert out["g_lu"] > 0.0
 
-
-def test_cylinder_conductance_positive(cylinder_result):
-    out = compute_hydraulic_conductance(cylinder_result, verbose=False)
-    assert out["g_lu"] > 0.0
-
-
-def test_cylinder_pressure_drop(cylinder_result):
-    """dP_lu = (ρ_in − ρ_out) · c_s² = 0.01/3."""
-    out = compute_hydraulic_conductance(cylinder_result, verbose=False)
-    assert out["dP_lu"] == pytest.approx(0.01 / 3.0, rel=1e-6)
+    def test_pressure_drop(self):
+        """dP_lu = (ρ_in − ρ_out) · c_s² = 0.01/3."""
+        out = compute_hydraulic_conductance(self.result, verbose=False)
+        assert out["dP_lu"] == pytest.approx(0.01 / 3.0, rel=1e-6)
 
 
 # ---------------------------------------------------------------------------
@@ -147,30 +144,54 @@ def test_cylinder_pressure_drop(cylinder_result):
 _SIDE = 20
 
 
-@pytest.fixture(scope="module")
-def triangle_result():
-    """Converged LBM solution for an equilateral-triangle tube (side=20, L=30)."""
-    return solve_flow(_triangle_image(_SIDE), **_SOLVE_KW)
+class TestTriangleConductance:
+    @classmethod
+    def setup_class(cls):
+        cls.result = solve_flow(_triangle_image(_SIDE), **_SOLVE_KW)
+
+    def test_conductance_vs_stokes(self):
+        """LBM g_lu must match exact Stokes formula within 10 %.
+
+        Expanding each triangle edge outward by 0.5 voxels increases the inradius
+        by 0.5, which adds 2√3·0.5 = √3 to the effective side length.
+        """
+        out = compute_hydraulic_conductance(self.result, verbose=False)
+        side_eff = _SIDE + np.sqrt(3.0)
+        g_expected = _g_triangle(side=side_eff)
+        assert out["g_lu"] == pytest.approx(g_expected, rel=0.10)
+
+    def test_conductance_positive(self):
+        out = compute_hydraulic_conductance(self.result, verbose=False)
+        assert out["g_lu"] > 0.0
+
+    def test_pressure_drop(self):
+        """dP_lu = (ρ_in − ρ_out) · c_s² = 0.01/3."""
+        out = compute_hydraulic_conductance(self.result, verbose=False)
+        assert out["dP_lu"] == pytest.approx(0.01 / 3.0, rel=1e-6)
 
 
-def test_triangle_conductance_vs_stokes(triangle_result):
-    """LBM g_lu must match exact Stokes formula within 10 %.
+# ---------------------------------------------------------------------------
+# Manual runner ("Run file in interactive window")
+# ---------------------------------------------------------------------------
 
-    Expanding each triangle edge outward by 0.5 voxels increases the inradius
-    by 0.5, which adds 2√3·0.5 = √3 to the effective side length.
-    """
-    out = compute_hydraulic_conductance(triangle_result, verbose=False)
-    side_eff = _SIDE + np.sqrt(3.0)
-    g_expected = _g_triangle(side=side_eff)
-    assert out["g_lu"] == pytest.approx(g_expected, rel=0.10)
+if __name__ == "__main__":
+    import inspect
+    import taichi as ti
 
+    ti.init(arch=ti.cpu)
 
-def test_triangle_conductance_positive(triangle_result):
-    out = compute_hydraulic_conductance(triangle_result, verbose=False)
-    assert out["g_lu"] > 0.0
-
-
-def test_triangle_pressure_drop(triangle_result):
-    """dP_lu = (ρ_in − ρ_out) · c_s² = 0.01/3."""
-    out = compute_hydraulic_conductance(triangle_result, verbose=False)
-    assert out["dP_lu"] == pytest.approx(0.01 / 3.0, rel=1e-6)
+    for cls_name, cls in inspect.getmembers(
+        inspect.getmodule(lambda: None), inspect.isclass
+    ):
+        if not cls_name.startswith("Test"):
+            continue
+        cls.setup_class()
+        obj = cls()
+        for name in sorted(dir(obj)):
+            if not name.startswith("test_"):
+                continue
+            try:
+                getattr(obj, name)()
+                print(f"{cls_name}.{name}: passed")
+            except Exception as e:
+                print(f"{cls_name}.{name}: FAILED — {e}")

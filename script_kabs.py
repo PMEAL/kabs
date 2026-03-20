@@ -22,7 +22,7 @@ soln = kabs.solve_flow(
 )
 res = kabs.compute_permeability(
     soln,
-    direction="x",
+    direction="z",
 )
 print(f"Kabs = {res['k_lu']:.4f}")
 

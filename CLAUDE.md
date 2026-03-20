@@ -31,3 +31,11 @@
 - Filename: `{prefix}-{final_step}-{axis}.vtr`  (step count reflects actual converged step, not `n_steps`)
 - Flow VTR contains: `Solid` (int8), `rho` (float32), `velocity` (3-component float32)
 - Parsed using only `numpy` + `struct` (no VTK/pyvista dependency)
+
+### Test style
+- Tests are written as methods on a `TestClassName` class (not bare functions)
+- `setup_method` handles per-test setup (temp dirs, shared fixtures)
+- A `if __name__ == "__main__"` block at the bottom iterates over methods with
+  `for name in sorted(dir(obj))` and runs any starting with `test_`, so tests
+  can be run directly in an interactive window without pytest
+  

@@ -118,13 +118,9 @@ class TestCylinderConductance:
         cls.result = solve_flow(_cylinder_image(_R), **_SOLVE_KW)
 
     def test_conductance_vs_hagen_poiseuille(self):
-        """LBM g_lu must match HP(R_eff) within 7 %.
-
-        Midpoint bounce-back shifts the effective wall by +0.5 voxels, so we
-        compare against HP with R_eff = R + 0.5 = 10.5.
-        """
+        """LBM g_lu must match HP(R) within 7 %."""
         out = compute_hydraulic_conductance(self.result, verbose=False)
-        g_expected = _g_cylinder(r=_R + 0.5)
+        g_expected = _g_cylinder(r=_R)
         assert out["g_lu"] == pytest.approx(g_expected, rel=0.07)
 
     def test_conductance_positive(self):
@@ -150,14 +146,9 @@ class TestTriangleConductance:
         cls.result = solve_flow(_triangle_image(_SIDE), **_SOLVE_KW)
 
     def test_conductance_vs_stokes(self):
-        """LBM g_lu must match exact Stokes formula within 10 %.
-
-        Expanding each triangle edge outward by 0.5 voxels increases the inradius
-        by 0.5, which adds 2√3·0.5 = √3 to the effective side length.
-        """
+        """LBM g_lu must match exact Stokes formula within 10 %."""
         out = compute_hydraulic_conductance(self.result, verbose=False)
-        side_eff = _SIDE + np.sqrt(3.0)
-        g_expected = _g_triangle(side=side_eff)
+        g_expected = _g_triangle(side=_SIDE)
         assert out["g_lu"] == pytest.approx(g_expected, rel=0.10)
 
     def test_conductance_positive(self):

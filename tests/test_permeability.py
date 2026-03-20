@@ -60,14 +60,8 @@ def _bundle_image():
 
 
 def _k_analytical():
-    """Bundle-of-tubes permeability in lattice units.
-
-    k = N * π * R_eff^4 / (8 * ny * nz)
-
-    Midpoint bounce-back shifts the effective no-slip wall by +0.5 voxels,
-    giving R_eff = R + 0.5.
-    """
-    return _N_TUBES * np.pi * (_R + 0.5) ** 4 / (8 * _NY * _NZ)
+    """Bundle-of-tubes permeability in lattice units: k = N * π * R^4 / (8 * ny * nz)."""
+    return _N_TUBES * np.pi * _R**4 / (8 * _NY * _NZ)
 
 
 # ---------------------------------------------------------------------------

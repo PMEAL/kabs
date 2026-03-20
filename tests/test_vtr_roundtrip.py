@@ -196,9 +196,21 @@ if __name__ == "__main__":
     for name in sorted(dir(obj)):
         if not name.startswith("test_"):
             continue
-        obj.setup_method()
-        try:
-            getattr(obj, name)()
-            print(f"{name}: passed")
-        except Exception as e:
-            print(f"{name}: FAILED — {e}")
+        fn = getattr(obj.__class__, name)
+        marks = getattr(fn, "pytestmark", [])
+        parametrize = [m for m in marks if m.name == "parametrize"]
+        if parametrize:
+            argname = parametrize[0].args[0]
+            cases = [(f"{name}[{v}]", v) for v in parametrize[0].args[1]]
+        else:
+            cases = [(name, None)]
+        for label, val in cases:
+            obj.setup_method()
+            try:
+                if val is None:
+                    getattr(obj, name)()
+                else:
+                    getattr(obj, name)(val)
+                print(f"{label}: passed")
+            except Exception as e:
+                print(f"{label}: FAILED — {e}")

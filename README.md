@@ -35,12 +35,14 @@ ti.init(arch=ti.cpu)  # use ti.gpu for GPU acceleration
 # Generate a synthetic test image (1 = pore, 0 = solid)
 im = ps.generators.cylinders([200, 200, 200], r=10, porosity=0.7).astype(int)
 
-# Run the LBM simulation.  Saves result to "sample.vtr" when done.
-solver = solve_flow(im, direction="x", export_vtk=False)
-solver.export_VTK("sample")
+# Run the LBM simulation and get a FlowResult back
+result = solve_flow(im, direction="x", export_vtk=False)
 
-# Compute permeability from the saved file
-results = compute_permeability("sample.vtr", direction="x")
+# Optionally save to a VTR file for later inspection
+result.export_to_vtk("sample")
+
+# Compute permeability directly from the FlowResult
+results = compute_permeability(result)
 print(f"k = {results['k_lu']:.4e} voxels²")
 ```
 
@@ -63,9 +65,9 @@ Pass the voxel size `dx_m` (in metres) to `compute_permeability` to get results 
 m² and milliDarcy:
 
 ```python
+result = solve_flow(im, direction="x")
 results = compute_permeability(
-    "sample.vtr",
-    direction="x",
+    result,
     dx_m=2.85e-6,   # 2.85-micron voxels, typical for micro-CT
 )
 print(f"k = {results['k_mD']:.2f} mD")
@@ -80,13 +82,12 @@ steps run is printed and reflected in the auto-generated VTR filename.
 
 ```python
 # Tighten or loosen the tolerance
-solver = solve_flow(im, direction="x", tol=1e-4)  # tighter
-solver = solve_flow(im, direction="x", tol=1e-2)  # faster, coarser
+result = solve_flow(im, direction="x", tol=1e-4)  # tighter
+result = solve_flow(im, direction="x", tol=1e-2)  # faster, coarser
 
 # Disable early stopping and always run n_steps
-n = 5000
-solve_flow(im, direction="x", n_steps=n, tol=None, output_prefix="sample")
-compute_permeability(f"sample-{n}-x.vtr", direction="x")
+result = solve_flow(im, direction="x", n_steps=5000, tol=None)
+compute_permeability(result)
 ```
 
 The convergence check fires every `log_every` steps (default 500), so the true stopping
@@ -97,15 +98,24 @@ point is rounded to that interval.
 For anisotropic materials, run all three directions:
 
 ```python
+results = {}
 for ax in ("x", "y", "z"):
-    solver = solve_flow(im, direction=ax, export_vtk=False)
-    solver.export_VTK(f"sample_{ax}")
+    result = solve_flow(im, direction=ax, export_vtk=False)
+    results[ax] = compute_permeability(result, dx_m=2.85e-6)
 
-kx = compute_permeability("sample_x.vtr", direction="x", dx_m=2.85e-6)
-ky = compute_permeability("sample_y.vtr", direction="y", dx_m=2.85e-6)
-kz = compute_permeability("sample_z.vtr", direction="z", dx_m=2.85e-6)
+print(f"Kx={results['x']['k_mD']:.2f}  Ky={results['y']['k_mD']:.2f}  Kz={results['z']['k_mD']:.2f}  mD")
+```
 
-print(f"Kx={kx['k_mD']:.2f}  Ky={ky['k_mD']:.2f}  Kz={kz['k_mD']:.2f}  mD")
+### Loading results from a VTR file
+
+`solve_flow` returns a `FlowResult` you can use immediately, but if you have a
+previously saved `.vtr` file you can reload it with `read_flow_vtr`:
+
+```python
+from kabs import read_flow_vtr, compute_permeability
+
+result = read_flow_vtr("sample-1000-x.vtr")
+results = compute_permeability(result, dx_m=2.85e-6)
 ```
 
 ### Memory-efficient sparse storage

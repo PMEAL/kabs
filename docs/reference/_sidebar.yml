@@ -1,0 +1,10 @@
+website:
+  sidebar:
+  - contents:
+    - reference/index.qmd
+    - contents:
+      - reference/kabs.qmd
+      - reference/utils.qmd
+      - reference/plots.qmd
+    id: reference
+  - id: dummy-sidebar

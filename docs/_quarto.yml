@@ -2,7 +2,7 @@ project:
   type: website
 
 website:
-  title: "pnmlib"
+  title: "kabs"
   navbar:
     left:
       - href: index.qmd
@@ -22,7 +22,7 @@ format:
     toc: true
 
 quartodoc:
-  package: pnmlib
+  package: kabs
 
   # write sidebar and style data
   sidebar: reference/_sidebar.yml
@@ -37,7 +37,11 @@ quartodoc:
           children: separate
           include_imports: true
           include_empty: true
-        - name: inspect
+        - name: utils
+          include_imports: true
+          children: separate
+          include_empty: true          
+        - name: plots
           include_imports: true
           children: separate
           include_empty: true

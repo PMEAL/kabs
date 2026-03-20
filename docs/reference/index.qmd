@@ -1,0 +1,11 @@
+# Function reference {.doc .doc-index}
+
+## Core Functions
+
+Core functionality for getting and setting data
+
+| | |
+| --- | --- |
+| [core](core.qmd#kabs) |  |
+| [utils](inspect.qmd#kabs.utils) |  |
+| [plots](plots.qmd#kabs.plots) |  |

@@ -1,0 +1,44 @@
+project:
+  type: website
+
+website:
+  title: "pnmlib"
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+      - about.qmd
+      - reference/index.qmd
+
+metadata-files:
+  - reference/_sidebar.yml
+
+format:
+  html:
+    theme:
+      - cosmo
+      - brand
+    css: styles.css
+    toc: true
+
+quartodoc:
+  package: pnmlib
+
+  # write sidebar and style data
+  sidebar: reference/_sidebar.yml
+  css: reference/_styles-quartodoc.css
+
+  sections:
+    - title: Core Functions
+      desc: "Core functionality for getting and setting data"
+      contents:
+        - name: core
+          # dynamic: true
+          children: separate
+          include_imports: true
+          include_empty: true
+        - name: inspect
+          include_imports: true
+          children: separate
+          include_empty: true
+          

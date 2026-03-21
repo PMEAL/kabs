@@ -2,10 +2,30 @@
 
 ## Core Functions
 
-Core functionality for getting and setting data
+Solve flow and compute transport properties
 
 | | |
 | --- | --- |
-| [core](core.qmd#kabs) |  |
-| [utils](inspect.qmd#kabs.utils) |  |
-| [plots](plots.qmd#kabs.plots) |  |
+| [solve_flow](solve_flow.qmd#kabs.solve_flow) | Run a pressure-driven single-phase LBM simulation to steady state. |
+| [compute_permeability](compute_permeability.qmd#kabs.compute_permeability) | Compute Darcy permeability from a single-phase LBM simulation. |
+| [compute_hydraulic_conductance](compute_hydraulic_conductance.qmd#kabs.compute_hydraulic_conductance) | Compute hydraulic conductance g from a single-phase LBM simulation. |
+| [FlowResult](FlowResult.qmd#kabs.FlowResult) | Container for a converged single-phase LBM flow simulation. |
+
+## Utilities
+
+VTR file I/O
+
+| | |
+| --- | --- |
+| [utils.read_flow_vtr](utils.read_flow_vtr.qmd#kabs.utils.read_flow_vtr) | Read a flow .vtr file and return a :class:`~kabs.FlowResult`. |
+| [utils.write_flow_vtr](utils.write_flow_vtr.qmd#kabs.utils.write_flow_vtr) | Write a FlowResult to a VTK Rectilinear Grid (.vtr) file. |
+
+## Visualization
+
+Plotting helpers
+
+| | |
+| --- | --- |
+| [plots.plot_cross_section](plots.plot_cross_section.qmd#kabs.plots.plot_cross_section) | Generate a 2D image of the velocity field for plotting |
+| [plots.add_streamlines](plots.add_streamlines.qmd#kabs.plots.add_streamlines) |  |
+| [plots.render_flow](plots.render_flow.qmd#kabs.plots.render_flow) | Render a ParaView-style 3D visualisation of the solid structure and flow |

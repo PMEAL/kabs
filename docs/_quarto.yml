@@ -23,6 +23,7 @@ format:
 
 quartodoc:
   package: kabs
+  dynamic: true
 
   # write sidebar and style data
   sidebar: reference/_sidebar.yml
@@ -30,19 +31,21 @@ quartodoc:
 
   sections:
     - title: Core Functions
-      desc: "Core functionality for getting and setting data"
+      desc: "Solve flow and compute transport properties"
       contents:
-        - name: core
-          # dynamic: true
-          children: separate
-          include_imports: true
-          include_empty: true
-        - name: utils
-          include_imports: true
-          children: separate
-          include_empty: true          
-        - name: plots
-          include_imports: true
-          children: separate
-          include_empty: true
+        - solve_flow
+        - compute_permeability
+        - compute_hydraulic_conductance
+        - FlowResult
+    - title: Utilities
+      desc: "VTR file I/O"
+      contents:
+        - utils.read_flow_vtr
+        - utils.write_flow_vtr
+    - title: Visualization
+      desc: "Plotting helpers"
+      contents:
+        - plots.plot_cross_section
+        - plots.add_streamlines
+        - plots.render_flow
           

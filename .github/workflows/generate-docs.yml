@@ -27,7 +27,7 @@ jobs:
       - name: Install dependencies
         run: |
           uv sync
-          uv pip install quartodoc
+          uv pip install "quartodoc" "griffe<1.0"
 
       - name: Build the documentation
         run: |

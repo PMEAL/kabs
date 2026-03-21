@@ -26,7 +26,7 @@ jobs:
         run: uv sync
 
       - name: Install pytest
-        run: pip install pytest pytest-cov
+        run: uv pip install pytest pytest-cov
 
       - name: Run tests
         run: uv run pytest tests/ -v --cov=kabs --cov-report=xml

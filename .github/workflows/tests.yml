@@ -23,7 +23,16 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: uv sync --group dev
+        run: uv sync
+        run: pip install pytest pytest-cov
 
       - name: Run tests
         run: uv run pytest tests/ -v
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella

@@ -1,236 +1,50 @@
 [
   {
-    "objectID": "about.html",
-    "href": "about.html",
-    "title": "About",
+    "objectID": "reference/FlowResult.html",
+    "href": "reference/FlowResult.html",
+    "title": "FlowResult",
     "section": "",
-    "text": "About this site"
-  },
-  {
-    "objectID": "reference/compute_permeability.html",
-    "href": "reference/compute_permeability.html",
-    "title": "compute_permeability",
-    "section": "",
-    "text": "compute_permeability(source, direction=None, nu=None, dx_m=None, verbose=True)\nCompute Darcy permeability from a single-phase LBM simulation.\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\nDefault\n\n\n\n\nsource\nFlowResult\nA FlowResult returned by solve_flow(). direction and nu default to the values stored in the result.\nrequired\n\n\ndirection\n(x, y, z)\nFlow direction. If None, taken from source.direction.\n'x'\n\n\nnu\nfloat or None\nKinematic viscosity in lattice units. If None, taken from source.nu.\nNone\n\n\ndx_m\nfloat or None\nPhysical voxel size in metres. If given, results are also reported in m² and milliDarcy. E.g. dx_m=2.85e-6 for a 2.85-µm scan.\nNone\n\n\nverbose\nbool\nPrint a summary of results to stdout. Default True.\nTrue\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\n\n\n\n\n\ndict with keys:\nporosity – pore fraction (dimensionless) u_darcy – superficial velocity in the flow direction (lu/ts) u_pore – mean pore-space velocity (lu/ts) k_lu – permeability in lattice units (voxels²) k_m2 – permeability in m² (None if dx_m is None) k_mD – permeability in milliDarcy (None if dx_m is None)",
+    "text": "FlowResult(solver, direction, nu)\nContainer for a converged single-phase LBM flow simulation.\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\n\n\n\n\nsolid\nnp.ndarray, shape (nx, ny, nz), dtype int8\nSolid mask in internal convention: 1 = solid, 0 = pore.\n\n\nrho\nnp.ndarray, shape (nx, ny, nz), dtype float32\nDensity field.\n\n\nvelocity\nnp.ndarray, shape (nx, ny, nz, 3), dtype float32\nVelocity field (vx, vy, vz) at each voxel.\n\n\ndirection\nstr\nFlow direction used in the simulation (‘x’, ‘y’, or ‘z’).\n\n\nnu\nfloat\nKinematic viscosity in lattice units.\n\n\n\n\n\n\n\n\n\nName\nDescription\n\n\n\n\nexport_to_vtk\nWrite a VTK Rectilinear Grid (.vtr) file.\n\n\nfrom_arrays\nConstruct a FlowResult directly from numpy arrays (e.g. read from a VTR file).\n\n\n\n\n\nFlowResult.export_to_vtk(prefix)\nWrite a VTK Rectilinear Grid (.vtr) file.\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\nDefault\n\n\n\n\nprefix\nstr\nOutput path without extension (pyevtk appends .vtr).\nrequired\n\n\n\n\n\n\n\nFlowResult.from_arrays(solid, rho, velocity, direction=None, nu=None)\nConstruct a FlowResult directly from numpy arrays (e.g. read from a VTR file).\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\nDefault\n\n\n\n\nsolid\nnp.ndarray, shape (nx, ny, nz), dtype int8\nSolid mask: 1 = solid, 0 = pore.\nrequired\n\n\nrho\nnp.ndarray, shape (nx, ny, nz), dtype float32\nDensity field.\nrequired\n\n\nvelocity\nnp.ndarray, shape (nx, ny, nz, 3), dtype float32\nVelocity field.\nrequired\n\n\ndirection\n(x, y, z)\nFlow direction. Can be supplied later to compute_permeability.\n'x'\n\n\nnu\nfloat or None\nKinematic viscosity in lattice units. Can be supplied later.\nNone",
     "crumbs": [
       "Function reference",
       "Core Functions",
-      "compute_permeability"
+      "FlowResult"
     ]
   },
   {
-    "objectID": "reference/compute_permeability.html#parameters",
-    "href": "reference/compute_permeability.html#parameters",
-    "title": "compute_permeability",
+    "objectID": "reference/FlowResult.html#attributes",
+    "href": "reference/FlowResult.html#attributes",
+    "title": "FlowResult",
     "section": "",
-    "text": "Name\nType\nDescription\nDefault\n\n\n\n\nsource\nFlowResult\nA FlowResult returned by solve_flow(). direction and nu default to the values stored in the result.\nrequired\n\n\ndirection\n(x, y, z)\nFlow direction. If None, taken from source.direction.\n'x'\n\n\nnu\nfloat or None\nKinematic viscosity in lattice units. If None, taken from source.nu.\nNone\n\n\ndx_m\nfloat or None\nPhysical voxel size in metres. If given, results are also reported in m² and milliDarcy. E.g. dx_m=2.85e-6 for a 2.85-µm scan.\nNone\n\n\nverbose\nbool\nPrint a summary of results to stdout. Default True.\nTrue",
+    "text": "Name\nType\nDescription\n\n\n\n\nsolid\nnp.ndarray, shape (nx, ny, nz), dtype int8\nSolid mask in internal convention: 1 = solid, 0 = pore.\n\n\nrho\nnp.ndarray, shape (nx, ny, nz), dtype float32\nDensity field.\n\n\nvelocity\nnp.ndarray, shape (nx, ny, nz, 3), dtype float32\nVelocity field (vx, vy, vz) at each voxel.\n\n\ndirection\nstr\nFlow direction used in the simulation (‘x’, ‘y’, or ‘z’).\n\n\nnu\nfloat\nKinematic viscosity in lattice units.",
     "crumbs": [
       "Function reference",
       "Core Functions",
-      "compute_permeability"
+      "FlowResult"
     ]
   },
   {
-    "objectID": "reference/compute_permeability.html#returns",
-    "href": "reference/compute_permeability.html#returns",
-    "title": "compute_permeability",
+    "objectID": "reference/FlowResult.html#methods",
+    "href": "reference/FlowResult.html#methods",
+    "title": "FlowResult",
     "section": "",
-    "text": "Name\nType\nDescription\n\n\n\n\n\ndict with keys:\nporosity – pore fraction (dimensionless) u_darcy – superficial velocity in the flow direction (lu/ts) u_pore – mean pore-space velocity (lu/ts) k_lu – permeability in lattice units (voxels²) k_m2 – permeability in m² (None if dx_m is None) k_mD – permeability in milliDarcy (None if dx_m is None)",
+    "text": "Name\nDescription\n\n\n\n\nexport_to_vtk\nWrite a VTK Rectilinear Grid (.vtr) file.\n\n\nfrom_arrays\nConstruct a FlowResult directly from numpy arrays (e.g. read from a VTR file).\n\n\n\n\n\nFlowResult.export_to_vtk(prefix)\nWrite a VTK Rectilinear Grid (.vtr) file.\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\nDefault\n\n\n\n\nprefix\nstr\nOutput path without extension (pyevtk appends .vtr).\nrequired\n\n\n\n\n\n\n\nFlowResult.from_arrays(solid, rho, velocity, direction=None, nu=None)\nConstruct a FlowResult directly from numpy arrays (e.g. read from a VTR file).\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\nDefault\n\n\n\n\nsolid\nnp.ndarray, shape (nx, ny, nz), dtype int8\nSolid mask: 1 = solid, 0 = pore.\nrequired\n\n\nrho\nnp.ndarray, shape (nx, ny, nz), dtype float32\nDensity field.\nrequired\n\n\nvelocity\nnp.ndarray, shape (nx, ny, nz, 3), dtype float32\nVelocity field.\nrequired\n\n\ndirection\n(x, y, z)\nFlow direction. Can be supplied later to compute_permeability.\n'x'\n\n\nnu\nfloat or None\nKinematic viscosity in lattice units. Can be supplied later.\nNone",
     "crumbs": [
       "Function reference",
       "Core Functions",
-      "compute_permeability"
+      "FlowResult"
     ]
   },
   {
-    "objectID": "reference/plots.plot_cross_section.html",
-    "href": "reference/plots.plot_cross_section.html",
-    "title": "plots.plot_cross_section",
+    "objectID": "reference/utils.read_flow_vtr.html",
+    "href": "reference/utils.read_flow_vtr.html",
+    "title": "utils.read_flow_vtr",
     "section": "",
-    "text": "plots.plot_cross_section(source, direction='x', axis=2, streamlines=None)\nGenerate a 2D image of the velocity field for plotting\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\nDefault\n\n\n\n\nsource\nFlowResult or str\nEither a FlowResult returned by solve_flow(), or a path to a .vtr file written by SinglePhaseSolver.export_VTK().\nrequired\n\n\ndirection\nstr\nSpecifies which component of the velocity vector to plot. The default is “x”. “all” will plot the magnitude of the velocity (i.e. the sum of all velocity components)\n'x'\n\n\naxis\nint\nThe direction where the 2D slice should be taken. The default is 2, meaning it views the domain in the z-direction, thus shows an ‘x-y’ plane.\n2\n\n\nstreamlines\ndict or None\nIf None (default), no streamlines are drawn. If a dict, plt.streamplot is called on the current axes using the in-plane velocity components at the slice midpoint. Any keys in the dict are forwarded as keyword arguments to plt.streamplot (e.g. {'color': 'white', 'density': 1.5}).\nNone\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\n\n\n\n\nvelocity\nndarray\nA 2D array with voxel value corresponding to the velocity.",
-    "crumbs": [
-      "Function reference",
-      "Visualization",
-      "plots.plot_cross_section"
-    ]
-  },
-  {
-    "objectID": "reference/plots.plot_cross_section.html#parameters",
-    "href": "reference/plots.plot_cross_section.html#parameters",
-    "title": "plots.plot_cross_section",
-    "section": "",
-    "text": "Name\nType\nDescription\nDefault\n\n\n\n\nsource\nFlowResult or str\nEither a FlowResult returned by solve_flow(), or a path to a .vtr file written by SinglePhaseSolver.export_VTK().\nrequired\n\n\ndirection\nstr\nSpecifies which component of the velocity vector to plot. The default is “x”. “all” will plot the magnitude of the velocity (i.e. the sum of all velocity components)\n'x'\n\n\naxis\nint\nThe direction where the 2D slice should be taken. The default is 2, meaning it views the domain in the z-direction, thus shows an ‘x-y’ plane.\n2\n\n\nstreamlines\ndict or None\nIf None (default), no streamlines are drawn. If a dict, plt.streamplot is called on the current axes using the in-plane velocity components at the slice midpoint. Any keys in the dict are forwarded as keyword arguments to plt.streamplot (e.g. {'color': 'white', 'density': 1.5}).\nNone",
-    "crumbs": [
-      "Function reference",
-      "Visualization",
-      "plots.plot_cross_section"
-    ]
-  },
-  {
-    "objectID": "reference/plots.plot_cross_section.html#returns",
-    "href": "reference/plots.plot_cross_section.html#returns",
-    "title": "plots.plot_cross_section",
-    "section": "",
-    "text": "Name\nType\nDescription\n\n\n\n\nvelocity\nndarray\nA 2D array with voxel value corresponding to the velocity.",
-    "crumbs": [
-      "Function reference",
-      "Visualization",
-      "plots.plot_cross_section"
-    ]
-  },
-  {
-    "objectID": "reference/compute_hydraulic_conductance.html",
-    "href": "reference/compute_hydraulic_conductance.html",
-    "title": "compute_hydraulic_conductance",
-    "section": "",
-    "text": "compute_hydraulic_conductance(\n    source,\n    direction=None,\n    nu=None,\n    dx_m=None,\n    mu_phys=None,\n    verbose=True,\n)\nCompute hydraulic conductance g from a single-phase LBM simulation.\nThe conductance is defined by Q = g * (P_in - P_out), where Q is the volumetric flow rate through the conduit. For a circular cylinder of radius R and length L this equals the Hagen-Poiseuille value g = pi * R^4 / (8 * mu * L).\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\nDefault\n\n\n\n\nsource\nFlowResult or str / path - like\nEither a FlowResult returned by solve_flow(), or a path to a .vtr file written by SinglePhaseSolver.export_VTK(). When a FlowResult is given, direction and nu default to the values stored in the result.\nrequired\n\n\ndirection\n(x, y, z)\nFlow direction. If None and source is a FlowResult, taken from source.direction; otherwise defaults to 'x'.\n'x'\n\n\nnu\nfloat or None\nKinematic viscosity used in the LBM simulation (lattice units). If None and source is a FlowResult, taken from source.nu; otherwise defaults to 1/6.\nNone\n\n\ndx_m\nfloat or None\nPhysical voxel size in metres. Required for physical-unit output.\nNone\n\n\nmu_phys\nfloat or None\nDynamic viscosity of the fluid in Pa·s (e.g. water at 20 °C ≈ 1e-3). Required for physical-unit output. Ignored if dx_m is None.\nNone\n\n\nverbose\nbool\nPrint a summary of results to stdout. Default True.\nTrue\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\n\n\n\n\n\ndict with keys:\nQ_lu – volumetric flow rate in lattice units (lu^3/ts) dP_lu – total pressure drop in lattice units g_lu – conductance in lattice units (lu^3/ts / lu_pressure) Q_m3s – volumetric flow rate in m^3/s (None if dx_m/mu_phys not given) dP_Pa – total pressure drop in Pa (None if dx_m/mu_phys not given) g_SI – conductance in m^3/(Pa·s) (None if dx_m/mu_phys not given)",
-    "crumbs": [
-      "Function reference",
-      "Core Functions",
-      "compute_hydraulic_conductance"
-    ]
-  },
-  {
-    "objectID": "reference/compute_hydraulic_conductance.html#parameters",
-    "href": "reference/compute_hydraulic_conductance.html#parameters",
-    "title": "compute_hydraulic_conductance",
-    "section": "",
-    "text": "Name\nType\nDescription\nDefault\n\n\n\n\nsource\nFlowResult or str / path - like\nEither a FlowResult returned by solve_flow(), or a path to a .vtr file written by SinglePhaseSolver.export_VTK(). When a FlowResult is given, direction and nu default to the values stored in the result.\nrequired\n\n\ndirection\n(x, y, z)\nFlow direction. If None and source is a FlowResult, taken from source.direction; otherwise defaults to 'x'.\n'x'\n\n\nnu\nfloat or None\nKinematic viscosity used in the LBM simulation (lattice units). If None and source is a FlowResult, taken from source.nu; otherwise defaults to 1/6.\nNone\n\n\ndx_m\nfloat or None\nPhysical voxel size in metres. Required for physical-unit output.\nNone\n\n\nmu_phys\nfloat or None\nDynamic viscosity of the fluid in Pa·s (e.g. water at 20 °C ≈ 1e-3). Required for physical-unit output. Ignored if dx_m is None.\nNone\n\n\nverbose\nbool\nPrint a summary of results to stdout. Default True.\nTrue",
-    "crumbs": [
-      "Function reference",
-      "Core Functions",
-      "compute_hydraulic_conductance"
-    ]
-  },
-  {
-    "objectID": "reference/compute_hydraulic_conductance.html#returns",
-    "href": "reference/compute_hydraulic_conductance.html#returns",
-    "title": "compute_hydraulic_conductance",
-    "section": "",
-    "text": "Name\nType\nDescription\n\n\n\n\n\ndict with keys:\nQ_lu – volumetric flow rate in lattice units (lu^3/ts) dP_lu – total pressure drop in lattice units g_lu – conductance in lattice units (lu^3/ts / lu_pressure) Q_m3s – volumetric flow rate in m^3/s (None if dx_m/mu_phys not given) dP_Pa – total pressure drop in Pa (None if dx_m/mu_phys not given) g_SI – conductance in m^3/(Pa·s) (None if dx_m/mu_phys not given)",
-    "crumbs": [
-      "Function reference",
-      "Core Functions",
-      "compute_hydraulic_conductance"
-    ]
-  },
-  {
-    "objectID": "reference/plots.add_streamlines.html",
-    "href": "reference/plots.add_streamlines.html",
-    "title": "plots.add_streamlines",
-    "section": "",
-    "text": "plots.add_streamlines\nplots.add_streamlines(source, ax, axis, **kwargs)",
-    "crumbs": [
-      "Function reference",
-      "Visualization",
-      "plots.add_streamlines"
-    ]
-  },
-  {
-    "objectID": "reference/index.html",
-    "href": "reference/index.html",
-    "title": "Function reference",
-    "section": "",
-    "text": "Solve flow and compute transport properties\n\n\n\nsolve_flow\nRun a pressure-driven single-phase LBM simulation to steady state.\n\n\ncompute_permeability\nCompute Darcy permeability from a single-phase LBM simulation.\n\n\ncompute_hydraulic_conductance\nCompute hydraulic conductance g from a single-phase LBM simulation.\n\n\nFlowResult\nContainer for a converged single-phase LBM flow simulation.\n\n\n\n\n\n\nVTR file I/O\n\n\n\nutils.read_flow_vtr\nRead a flow .vtr file and return a :class:~kabs.FlowResult.\n\n\nutils.write_flow_vtr\nWrite a FlowResult to a VTK Rectilinear Grid (.vtr) file.\n\n\n\n\n\n\nPlotting helpers\n\n\n\nplots.plot_cross_section\nGenerate a 2D image of the velocity field for plotting\n\n\nplots.add_streamlines\n\n\n\nplots.render_flow\nRender a ParaView-style 3D visualisation of the solid structure and flow",
-    "crumbs": [
-      "Function reference"
-    ]
-  },
-  {
-    "objectID": "reference/index.html#core-functions",
-    "href": "reference/index.html#core-functions",
-    "title": "Function reference",
-    "section": "",
-    "text": "Solve flow and compute transport properties\n\n\n\nsolve_flow\nRun a pressure-driven single-phase LBM simulation to steady state.\n\n\ncompute_permeability\nCompute Darcy permeability from a single-phase LBM simulation.\n\n\ncompute_hydraulic_conductance\nCompute hydraulic conductance g from a single-phase LBM simulation.\n\n\nFlowResult\nContainer for a converged single-phase LBM flow simulation.",
-    "crumbs": [
-      "Function reference"
-    ]
-  },
-  {
-    "objectID": "reference/index.html#utilities",
-    "href": "reference/index.html#utilities",
-    "title": "Function reference",
-    "section": "",
-    "text": "VTR file I/O\n\n\n\nutils.read_flow_vtr\nRead a flow .vtr file and return a :class:~kabs.FlowResult.\n\n\nutils.write_flow_vtr\nWrite a FlowResult to a VTK Rectilinear Grid (.vtr) file.",
-    "crumbs": [
-      "Function reference"
-    ]
-  },
-  {
-    "objectID": "reference/index.html#visualization",
-    "href": "reference/index.html#visualization",
-    "title": "Function reference",
-    "section": "",
-    "text": "Plotting helpers\n\n\n\nplots.plot_cross_section\nGenerate a 2D image of the velocity field for plotting\n\n\nplots.add_streamlines\n\n\n\nplots.render_flow\nRender a ParaView-style 3D visualisation of the solid structure and flow",
-    "crumbs": [
-      "Function reference"
-    ]
-  },
-  {
-    "objectID": "index.html",
-    "href": "index.html",
-    "title": "kabs",
-    "section": "",
-    "text": "This is a Quarto website.\nTo learn more about Quarto websites visit https://quarto.org/docs/websites."
-  },
-  {
-    "objectID": "reference/utils.write_flow_vtr.html",
-    "href": "reference/utils.write_flow_vtr.html",
-    "title": "utils.write_flow_vtr",
-    "section": "",
-    "text": "utils.write_flow_vtr(path, result)\nWrite a FlowResult to a VTK Rectilinear Grid (.vtr) file.\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\nDefault\n\n\n\n\npath\nstr\nOutput path without extension (pyevtk appends .vtr).\nrequired\n\n\nresult\nFlowResult\nA converged flow result containing solid, rho, and velocity. direction and nu are embedded as a metadata comment when present.\nrequired",
+    "text": "utils.read_flow_vtr\nutils.read_flow_vtr(vtr_file, verbose=False)\nRead a flow .vtr file and return a :class:~kabs.FlowResult.\ndirection and nu are restored from the file when the file was written by :func:write_flow_vtr with a FlowResult that carried them.",
     "crumbs": [
       "Function reference",
       "Utilities",
-      "utils.write_flow_vtr"
-    ]
-  },
-  {
-    "objectID": "reference/utils.write_flow_vtr.html#parameters",
-    "href": "reference/utils.write_flow_vtr.html#parameters",
-    "title": "utils.write_flow_vtr",
-    "section": "",
-    "text": "Name\nType\nDescription\nDefault\n\n\n\n\npath\nstr\nOutput path without extension (pyevtk appends .vtr).\nrequired\n\n\nresult\nFlowResult\nA converged flow result containing solid, rho, and velocity. direction and nu are embedded as a metadata comment when present.\nrequired",
-    "crumbs": [
-      "Function reference",
-      "Utilities",
-      "utils.write_flow_vtr"
-    ]
-  },
-  {
-    "objectID": "reference/plots.render_flow.html",
-    "href": "reference/plots.render_flow.html",
-    "title": "plots.render_flow",
-    "section": "",
-    "text": "plots.render_flow(\n    result,\n    direction=None,\n    n_streamlines=200,\n    solid_opacity=0.15,\n    solid_color='dimgray',\n    tube_radius=0.4,\n    cmap='Blues',\n    save=None,\n    show=True,\n    off_screen=False,\n    window_size=(800, 600),\n)\nRender a ParaView-style 3D visualisation of the solid structure and flow streamlines.\nRequires pyvista (pip install pyvista).\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\nDefault\n\n\n\n\nresult\nFlowResult\nConverged flow result returned by solve_flow() or read_flow_vtr().\nrequired\n\n\nn_streamlines\nint\nNumber of seed points arranged as a grid on the inlet face. Default 200.\n200\n\n\nsolid_opacity\nfloat\nOpacity of the solid surface mesh (0 = invisible, 1 = fully opaque). Default 0.15.\n0.15\n\n\nsolid_color\nstr\nColour of the solid surface. Default \"dimgray\".\n'dimgray'\n\n\ntube_radius\nfloat\nRadius of the streamline tubes in voxel units. Default 0.4.\n0.4\n\n\ncmap\nstr\nMatplotlib colormap used to colour streamlines by flow speed. Default \"Blues\".\n'Blues'\n\n\nsave\nstr or None\nPath at which to save a PNG screenshot. None (default) skips saving.\nNone\n\n\nshow\nbool\nOpen an interactive window after rendering. Default True.\nTrue\n\n\noff_screen\nbool\nRender without opening a display window (useful on headless servers when save is set). Default False.\nFalse\n\n\nwindow_size\ntuple of int\nRender-window width × height in pixels. Default (800, 600).\n(800, 600)\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\n\n\n\n\nplotter\npyvista.Plotter\nThe configured plotter (already shown/saved if requested).",
-    "crumbs": [
-      "Function reference",
-      "Visualization",
-      "plots.render_flow"
-    ]
-  },
-  {
-    "objectID": "reference/plots.render_flow.html#parameters",
-    "href": "reference/plots.render_flow.html#parameters",
-    "title": "plots.render_flow",
-    "section": "",
-    "text": "Name\nType\nDescription\nDefault\n\n\n\n\nresult\nFlowResult\nConverged flow result returned by solve_flow() or read_flow_vtr().\nrequired\n\n\nn_streamlines\nint\nNumber of seed points arranged as a grid on the inlet face. Default 200.\n200\n\n\nsolid_opacity\nfloat\nOpacity of the solid surface mesh (0 = invisible, 1 = fully opaque). Default 0.15.\n0.15\n\n\nsolid_color\nstr\nColour of the solid surface. Default \"dimgray\".\n'dimgray'\n\n\ntube_radius\nfloat\nRadius of the streamline tubes in voxel units. Default 0.4.\n0.4\n\n\ncmap\nstr\nMatplotlib colormap used to colour streamlines by flow speed. Default \"Blues\".\n'Blues'\n\n\nsave\nstr or None\nPath at which to save a PNG screenshot. None (default) skips saving.\nNone\n\n\nshow\nbool\nOpen an interactive window after rendering. Default True.\nTrue\n\n\noff_screen\nbool\nRender without opening a display window (useful on headless servers when save is set). Default False.\nFalse\n\n\nwindow_size\ntuple of int\nRender-window width × height in pixels. Default (800, 600).\n(800, 600)",
-    "crumbs": [
-      "Function reference",
-      "Visualization",
-      "plots.render_flow"
-    ]
-  },
-  {
-    "objectID": "reference/plots.render_flow.html#returns",
-    "href": "reference/plots.render_flow.html#returns",
-    "title": "plots.render_flow",
-    "section": "",
-    "text": "Name\nType\nDescription\n\n\n\n\nplotter\npyvista.Plotter\nThe configured plotter (already shown/saved if requested).",
-    "crumbs": [
-      "Function reference",
-      "Visualization",
-      "plots.render_flow"
+      "utils.read_flow_vtr"
     ]
   },
   {
@@ -282,51 +96,230 @@
     ]
   },
   {
-    "objectID": "reference/utils.read_flow_vtr.html",
-    "href": "reference/utils.read_flow_vtr.html",
-    "title": "utils.read_flow_vtr",
+    "objectID": "reference/plots.render_flow.html",
+    "href": "reference/plots.render_flow.html",
+    "title": "plots.render_flow",
     "section": "",
-    "text": "utils.read_flow_vtr\nutils.read_flow_vtr(vtr_file, verbose=False)\nRead a flow .vtr file and return a :class:~kabs.FlowResult.\ndirection and nu are restored from the file when the file was written by :func:write_flow_vtr with a FlowResult that carried them.",
+    "text": "plots.render_flow(\n    result,\n    direction=None,\n    n_streamlines=200,\n    solid_opacity=0.15,\n    solid_color='dimgray',\n    tube_radius=0.4,\n    cmap='Blues',\n    save=None,\n    show=True,\n    off_screen=False,\n    window_size=(800, 600),\n)\nRender a ParaView-style 3D visualisation of the solid structure and flow streamlines.\nRequires pyvista (pip install pyvista).\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\nDefault\n\n\n\n\nresult\nFlowResult\nConverged flow result returned by solve_flow() or read_flow_vtr().\nrequired\n\n\nn_streamlines\nint\nNumber of seed points arranged as a grid on the inlet face. Default 200.\n200\n\n\nsolid_opacity\nfloat\nOpacity of the solid surface mesh (0 = invisible, 1 = fully opaque). Default 0.15.\n0.15\n\n\nsolid_color\nstr\nColour of the solid surface. Default \"dimgray\".\n'dimgray'\n\n\ntube_radius\nfloat\nRadius of the streamline tubes in voxel units. Default 0.4.\n0.4\n\n\ncmap\nstr\nMatplotlib colormap used to colour streamlines by flow speed. Default \"Blues\".\n'Blues'\n\n\nsave\nstr or None\nPath at which to save a PNG screenshot. None (default) skips saving.\nNone\n\n\nshow\nbool\nOpen an interactive window after rendering. Default True.\nTrue\n\n\noff_screen\nbool\nRender without opening a display window (useful on headless servers when save is set). Default False.\nFalse\n\n\nwindow_size\ntuple of int\nRender-window width × height in pixels. Default (800, 600).\n(800, 600)\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\n\n\n\n\nplotter\npyvista.Plotter\nThe configured plotter (already shown/saved if requested).",
+    "crumbs": [
+      "Function reference",
+      "Visualization",
+      "plots.render_flow"
+    ]
+  },
+  {
+    "objectID": "reference/plots.render_flow.html#parameters",
+    "href": "reference/plots.render_flow.html#parameters",
+    "title": "plots.render_flow",
+    "section": "",
+    "text": "Name\nType\nDescription\nDefault\n\n\n\n\nresult\nFlowResult\nConverged flow result returned by solve_flow() or read_flow_vtr().\nrequired\n\n\nn_streamlines\nint\nNumber of seed points arranged as a grid on the inlet face. Default 200.\n200\n\n\nsolid_opacity\nfloat\nOpacity of the solid surface mesh (0 = invisible, 1 = fully opaque). Default 0.15.\n0.15\n\n\nsolid_color\nstr\nColour of the solid surface. Default \"dimgray\".\n'dimgray'\n\n\ntube_radius\nfloat\nRadius of the streamline tubes in voxel units. Default 0.4.\n0.4\n\n\ncmap\nstr\nMatplotlib colormap used to colour streamlines by flow speed. Default \"Blues\".\n'Blues'\n\n\nsave\nstr or None\nPath at which to save a PNG screenshot. None (default) skips saving.\nNone\n\n\nshow\nbool\nOpen an interactive window after rendering. Default True.\nTrue\n\n\noff_screen\nbool\nRender without opening a display window (useful on headless servers when save is set). Default False.\nFalse\n\n\nwindow_size\ntuple of int\nRender-window width × height in pixels. Default (800, 600).\n(800, 600)",
+    "crumbs": [
+      "Function reference",
+      "Visualization",
+      "plots.render_flow"
+    ]
+  },
+  {
+    "objectID": "reference/plots.render_flow.html#returns",
+    "href": "reference/plots.render_flow.html#returns",
+    "title": "plots.render_flow",
+    "section": "",
+    "text": "Name\nType\nDescription\n\n\n\n\nplotter\npyvista.Plotter\nThe configured plotter (already shown/saved if requested).",
+    "crumbs": [
+      "Function reference",
+      "Visualization",
+      "plots.render_flow"
+    ]
+  },
+  {
+    "objectID": "reference/utils.write_flow_vtr.html",
+    "href": "reference/utils.write_flow_vtr.html",
+    "title": "utils.write_flow_vtr",
+    "section": "",
+    "text": "utils.write_flow_vtr(path, result)\nWrite a FlowResult to a VTK Rectilinear Grid (.vtr) file.\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\nDefault\n\n\n\n\npath\nstr\nOutput path without extension (pyevtk appends .vtr).\nrequired\n\n\nresult\nFlowResult\nA converged flow result containing solid, rho, and velocity. direction and nu are embedded as a metadata comment when present.\nrequired",
     "crumbs": [
       "Function reference",
       "Utilities",
-      "utils.read_flow_vtr"
+      "utils.write_flow_vtr"
     ]
   },
   {
-    "objectID": "reference/FlowResult.html",
-    "href": "reference/FlowResult.html",
-    "title": "FlowResult",
+    "objectID": "reference/utils.write_flow_vtr.html#parameters",
+    "href": "reference/utils.write_flow_vtr.html#parameters",
+    "title": "utils.write_flow_vtr",
     "section": "",
-    "text": "FlowResult(solver, direction, nu)\nContainer for a converged single-phase LBM flow simulation.\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\n\n\n\n\nsolid\nnp.ndarray, shape (nx, ny, nz), dtype int8\nSolid mask in internal convention: 1 = solid, 0 = pore.\n\n\nrho\nnp.ndarray, shape (nx, ny, nz), dtype float32\nDensity field.\n\n\nvelocity\nnp.ndarray, shape (nx, ny, nz, 3), dtype float32\nVelocity field (vx, vy, vz) at each voxel.\n\n\ndirection\nstr\nFlow direction used in the simulation (‘x’, ‘y’, or ‘z’).\n\n\nnu\nfloat\nKinematic viscosity in lattice units.\n\n\n\n\n\n\n\n\n\nName\nDescription\n\n\n\n\nexport_to_vtk\nWrite a VTK Rectilinear Grid (.vtr) file.\n\n\nfrom_arrays\nConstruct a FlowResult directly from numpy arrays (e.g. read from a VTR file).\n\n\n\n\n\nFlowResult.export_to_vtk(prefix)\nWrite a VTK Rectilinear Grid (.vtr) file.\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\nDefault\n\n\n\n\nprefix\nstr\nOutput path without extension (pyevtk appends .vtr).\nrequired\n\n\n\n\n\n\n\nFlowResult.from_arrays(solid, rho, velocity, direction=None, nu=None)\nConstruct a FlowResult directly from numpy arrays (e.g. read from a VTR file).\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\nDefault\n\n\n\n\nsolid\nnp.ndarray, shape (nx, ny, nz), dtype int8\nSolid mask: 1 = solid, 0 = pore.\nrequired\n\n\nrho\nnp.ndarray, shape (nx, ny, nz), dtype float32\nDensity field.\nrequired\n\n\nvelocity\nnp.ndarray, shape (nx, ny, nz, 3), dtype float32\nVelocity field.\nrequired\n\n\ndirection\n(x, y, z)\nFlow direction. Can be supplied later to compute_permeability.\n'x'\n\n\nnu\nfloat or None\nKinematic viscosity in lattice units. Can be supplied later.\nNone",
+    "text": "Name\nType\nDescription\nDefault\n\n\n\n\npath\nstr\nOutput path without extension (pyevtk appends .vtr).\nrequired\n\n\nresult\nFlowResult\nA converged flow result containing solid, rho, and velocity. direction and nu are embedded as a metadata comment when present.\nrequired",
     "crumbs": [
       "Function reference",
-      "Core Functions",
-      "FlowResult"
+      "Utilities",
+      "utils.write_flow_vtr"
     ]
   },
   {
-    "objectID": "reference/FlowResult.html#attributes",
-    "href": "reference/FlowResult.html#attributes",
-    "title": "FlowResult",
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "kabs",
     "section": "",
-    "text": "Name\nType\nDescription\n\n\n\n\nsolid\nnp.ndarray, shape (nx, ny, nz), dtype int8\nSolid mask in internal convention: 1 = solid, 0 = pore.\n\n\nrho\nnp.ndarray, shape (nx, ny, nz), dtype float32\nDensity field.\n\n\nvelocity\nnp.ndarray, shape (nx, ny, nz, 3), dtype float32\nVelocity field (vx, vy, vz) at each voxel.\n\n\ndirection\nstr\nFlow direction used in the simulation (‘x’, ‘y’, or ‘z’).\n\n\nnu\nfloat\nKinematic viscosity in lattice units.",
+    "text": "This is a Quarto website.\nTo learn more about Quarto websites visit https://quarto.org/docs/websites."
+  },
+  {
+    "objectID": "reference/index.html",
+    "href": "reference/index.html",
+    "title": "Function reference",
+    "section": "",
+    "text": "Solve flow and compute transport properties\n\n\n\nsolve_flow\nRun a pressure-driven single-phase LBM simulation to steady state.\n\n\ncompute_permeability\nCompute Darcy permeability from a single-phase LBM simulation.\n\n\ncompute_hydraulic_conductance\nCompute hydraulic conductance g from a single-phase LBM simulation.\n\n\nFlowResult\nContainer for a converged single-phase LBM flow simulation.\n\n\n\n\n\n\nVTR file I/O\n\n\n\nutils.read_flow_vtr\nRead a flow .vtr file and return a :class:~kabs.FlowResult.\n\n\nutils.write_flow_vtr\nWrite a FlowResult to a VTK Rectilinear Grid (.vtr) file.\n\n\n\n\n\n\nPlotting helpers\n\n\n\nplots.plot_cross_section\nGenerate a 2D image of the velocity field for plotting\n\n\nplots.add_streamlines\n\n\n\nplots.render_flow\nRender a ParaView-style 3D visualisation of the solid structure and flow",
     "crumbs": [
-      "Function reference",
-      "Core Functions",
-      "FlowResult"
+      "Function reference"
     ]
   },
   {
-    "objectID": "reference/FlowResult.html#methods",
-    "href": "reference/FlowResult.html#methods",
-    "title": "FlowResult",
+    "objectID": "reference/index.html#core-functions",
+    "href": "reference/index.html#core-functions",
+    "title": "Function reference",
     "section": "",
-    "text": "Name\nDescription\n\n\n\n\nexport_to_vtk\nWrite a VTK Rectilinear Grid (.vtr) file.\n\n\nfrom_arrays\nConstruct a FlowResult directly from numpy arrays (e.g. read from a VTR file).\n\n\n\n\n\nFlowResult.export_to_vtk(prefix)\nWrite a VTK Rectilinear Grid (.vtr) file.\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\nDefault\n\n\n\n\nprefix\nstr\nOutput path without extension (pyevtk appends .vtr).\nrequired\n\n\n\n\n\n\n\nFlowResult.from_arrays(solid, rho, velocity, direction=None, nu=None)\nConstruct a FlowResult directly from numpy arrays (e.g. read from a VTR file).\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\nDefault\n\n\n\n\nsolid\nnp.ndarray, shape (nx, ny, nz), dtype int8\nSolid mask: 1 = solid, 0 = pore.\nrequired\n\n\nrho\nnp.ndarray, shape (nx, ny, nz), dtype float32\nDensity field.\nrequired\n\n\nvelocity\nnp.ndarray, shape (nx, ny, nz, 3), dtype float32\nVelocity field.\nrequired\n\n\ndirection\n(x, y, z)\nFlow direction. Can be supplied later to compute_permeability.\n'x'\n\n\nnu\nfloat or None\nKinematic viscosity in lattice units. Can be supplied later.\nNone",
+    "text": "Solve flow and compute transport properties\n\n\n\nsolve_flow\nRun a pressure-driven single-phase LBM simulation to steady state.\n\n\ncompute_permeability\nCompute Darcy permeability from a single-phase LBM simulation.\n\n\ncompute_hydraulic_conductance\nCompute hydraulic conductance g from a single-phase LBM simulation.\n\n\nFlowResult\nContainer for a converged single-phase LBM flow simulation.",
+    "crumbs": [
+      "Function reference"
+    ]
+  },
+  {
+    "objectID": "reference/index.html#utilities",
+    "href": "reference/index.html#utilities",
+    "title": "Function reference",
+    "section": "",
+    "text": "VTR file I/O\n\n\n\nutils.read_flow_vtr\nRead a flow .vtr file and return a :class:~kabs.FlowResult.\n\n\nutils.write_flow_vtr\nWrite a FlowResult to a VTK Rectilinear Grid (.vtr) file.",
+    "crumbs": [
+      "Function reference"
+    ]
+  },
+  {
+    "objectID": "reference/index.html#visualization",
+    "href": "reference/index.html#visualization",
+    "title": "Function reference",
+    "section": "",
+    "text": "Plotting helpers\n\n\n\nplots.plot_cross_section\nGenerate a 2D image of the velocity field for plotting\n\n\nplots.add_streamlines\n\n\n\nplots.render_flow\nRender a ParaView-style 3D visualisation of the solid structure and flow",
+    "crumbs": [
+      "Function reference"
+    ]
+  },
+  {
+    "objectID": "reference/plots.add_streamlines.html",
+    "href": "reference/plots.add_streamlines.html",
+    "title": "plots.add_streamlines",
+    "section": "",
+    "text": "plots.add_streamlines\nplots.add_streamlines(source, ax, axis, **kwargs)",
+    "crumbs": [
+      "Function reference",
+      "Visualization",
+      "plots.add_streamlines"
+    ]
+  },
+  {
+    "objectID": "reference/compute_hydraulic_conductance.html",
+    "href": "reference/compute_hydraulic_conductance.html",
+    "title": "compute_hydraulic_conductance",
+    "section": "",
+    "text": "compute_hydraulic_conductance(\n    source,\n    direction=None,\n    nu=None,\n    dx_m=None,\n    mu_phys=None,\n    verbose=True,\n)\nCompute hydraulic conductance g from a single-phase LBM simulation.\nThe conductance is defined by \\(Q = g * (P_in - P_out)\\), where \\(Q\\) is the volumetric flow rate through the conduit. For a circular cylinder of radius \\(R\\) and length \\(L\\) this equals the Hagen-Poiseuille value \\(g = pi * R^4 / (8 * mu * L)\\).\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\nDefault\n\n\n\n\nsource\nFlowResult or str / path - like\nEither a FlowResult returned by solve_flow(), or a path to a .vtr file written by SinglePhaseSolver.export_VTK(). When a FlowResult is given, direction and nu default to the values stored in the result.\nrequired\n\n\ndirection\n(x, y, z)\nFlow direction. If None and source is a FlowResult, taken from source.direction; otherwise defaults to 'x'.\n'x'\n\n\nnu\nfloat or None\nKinematic viscosity used in the LBM simulation (lattice units). If None and source is a FlowResult, taken from source.nu; otherwise defaults to 1/6.\nNone\n\n\ndx_m\nfloat or None\nPhysical voxel size in metres. Required for physical-unit output.\nNone\n\n\nmu_phys\nfloat or None\nDynamic viscosity of the fluid in Pa·s (e.g. water at 20 °C ≈ 1e-3). Required for physical-unit output. Ignored if dx_m is None.\nNone\n\n\nverbose\nbool\nPrint a summary of results to stdout. Default True.\nTrue\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\n\n\n\n\n\ndict with keys:\nQ_lu – volumetric flow rate in lattice units (lu^3/ts) dP_lu – total pressure drop in lattice units g_lu – conductance in lattice units (lu^3/ts / lu_pressure) Q_m3s – volumetric flow rate in m^3/s (None if dx_m/mu_phys not given) dP_Pa – total pressure drop in Pa (None if dx_m/mu_phys not given) g_SI – conductance in m^3/(Pa·s) (None if dx_m/mu_phys not given)",
     "crumbs": [
       "Function reference",
       "Core Functions",
-      "FlowResult"
+      "compute_hydraulic_conductance"
+    ]
+  },
+  {
+    "objectID": "reference/compute_hydraulic_conductance.html#parameters",
+    "href": "reference/compute_hydraulic_conductance.html#parameters",
+    "title": "compute_hydraulic_conductance",
+    "section": "",
+    "text": "Name\nType\nDescription\nDefault\n\n\n\n\nsource\nFlowResult or str / path - like\nEither a FlowResult returned by solve_flow(), or a path to a .vtr file written by SinglePhaseSolver.export_VTK(). When a FlowResult is given, direction and nu default to the values stored in the result.\nrequired\n\n\ndirection\n(x, y, z)\nFlow direction. If None and source is a FlowResult, taken from source.direction; otherwise defaults to 'x'.\n'x'\n\n\nnu\nfloat or None\nKinematic viscosity used in the LBM simulation (lattice units). If None and source is a FlowResult, taken from source.nu; otherwise defaults to 1/6.\nNone\n\n\ndx_m\nfloat or None\nPhysical voxel size in metres. Required for physical-unit output.\nNone\n\n\nmu_phys\nfloat or None\nDynamic viscosity of the fluid in Pa·s (e.g. water at 20 °C ≈ 1e-3). Required for physical-unit output. Ignored if dx_m is None.\nNone\n\n\nverbose\nbool\nPrint a summary of results to stdout. Default True.\nTrue",
+    "crumbs": [
+      "Function reference",
+      "Core Functions",
+      "compute_hydraulic_conductance"
+    ]
+  },
+  {
+    "objectID": "reference/compute_hydraulic_conductance.html#returns",
+    "href": "reference/compute_hydraulic_conductance.html#returns",
+    "title": "compute_hydraulic_conductance",
+    "section": "",
+    "text": "Name\nType\nDescription\n\n\n\n\n\ndict with keys:\nQ_lu – volumetric flow rate in lattice units (lu^3/ts) dP_lu – total pressure drop in lattice units g_lu – conductance in lattice units (lu^3/ts / lu_pressure) Q_m3s – volumetric flow rate in m^3/s (None if dx_m/mu_phys not given) dP_Pa – total pressure drop in Pa (None if dx_m/mu_phys not given) g_SI – conductance in m^3/(Pa·s) (None if dx_m/mu_phys not given)",
+    "crumbs": [
+      "Function reference",
+      "Core Functions",
+      "compute_hydraulic_conductance"
+    ]
+  },
+  {
+    "objectID": "reference/plots.plot_cross_section.html",
+    "href": "reference/plots.plot_cross_section.html",
+    "title": "plots.plot_cross_section",
+    "section": "",
+    "text": "plots.plot_cross_section(source, direction='x', axis=2, streamlines=None)\nGenerate a 2D image of the velocity field for plotting\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\nDefault\n\n\n\n\nsource\nFlowResult or str\nEither a FlowResult returned by solve_flow(), or a path to a .vtr file written by SinglePhaseSolver.export_VTK().\nrequired\n\n\ndirection\nstr\nSpecifies which component of the velocity vector to plot. The default is “x”. “all” will plot the magnitude of the velocity (i.e. the sum of all velocity components)\n'x'\n\n\naxis\nint\nThe direction where the 2D slice should be taken. The default is 2, meaning it views the domain in the z-direction, thus shows an ‘x-y’ plane.\n2\n\n\nstreamlines\ndict or None\nIf None (default), no streamlines are drawn. If a dict, plt.streamplot is called on the current axes using the in-plane velocity components at the slice midpoint. Any keys in the dict are forwarded as keyword arguments to plt.streamplot (e.g. {'color': 'white', 'density': 1.5}).\nNone\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\n\n\n\n\nvelocity\nndarray\nA 2D array with voxel value corresponding to the velocity.",
+    "crumbs": [
+      "Function reference",
+      "Visualization",
+      "plots.plot_cross_section"
+    ]
+  },
+  {
+    "objectID": "reference/plots.plot_cross_section.html#parameters",
+    "href": "reference/plots.plot_cross_section.html#parameters",
+    "title": "plots.plot_cross_section",
+    "section": "",
+    "text": "Name\nType\nDescription\nDefault\n\n\n\n\nsource\nFlowResult or str\nEither a FlowResult returned by solve_flow(), or a path to a .vtr file written by SinglePhaseSolver.export_VTK().\nrequired\n\n\ndirection\nstr\nSpecifies which component of the velocity vector to plot. The default is “x”. “all” will plot the magnitude of the velocity (i.e. the sum of all velocity components)\n'x'\n\n\naxis\nint\nThe direction where the 2D slice should be taken. The default is 2, meaning it views the domain in the z-direction, thus shows an ‘x-y’ plane.\n2\n\n\nstreamlines\ndict or None\nIf None (default), no streamlines are drawn. If a dict, plt.streamplot is called on the current axes using the in-plane velocity components at the slice midpoint. Any keys in the dict are forwarded as keyword arguments to plt.streamplot (e.g. {'color': 'white', 'density': 1.5}).\nNone",
+    "crumbs": [
+      "Function reference",
+      "Visualization",
+      "plots.plot_cross_section"
+    ]
+  },
+  {
+    "objectID": "reference/plots.plot_cross_section.html#returns",
+    "href": "reference/plots.plot_cross_section.html#returns",
+    "title": "plots.plot_cross_section",
+    "section": "",
+    "text": "Name\nType\nDescription\n\n\n\n\nvelocity\nndarray\nA 2D array with voxel value corresponding to the velocity.",
+    "crumbs": [
+      "Function reference",
+      "Visualization",
+      "plots.plot_cross_section"
+    ]
+  },
+  {
+    "objectID": "reference/compute_permeability.html",
+    "href": "reference/compute_permeability.html",
+    "title": "compute_permeability",
+    "section": "",
+    "text": "compute_permeability(source, direction=None, nu=None, dx_m=None, verbose=True)\nCompute Darcy permeability from a single-phase LBM simulation.\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\nDefault\n\n\n\n\nsource\nFlowResult\nA FlowResult returned by solve_flow(). direction and nu default to the values stored in the result.\nrequired\n\n\ndirection\n(x, y, z)\nFlow direction. If None, taken from source.direction.\n'x'\n\n\nnu\nfloat or None\nKinematic viscosity in lattice units. If None, taken from source.nu.\nNone\n\n\ndx_m\nfloat or None\nPhysical voxel size in metres. If given, results are also reported in m² and milliDarcy. E.g. dx_m=2.85e-6 for a 2.85-µm scan.\nNone\n\n\nverbose\nbool\nPrint a summary of results to stdout. Default True.\nTrue\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\n\n\n\n\n\ndict with keys:\nporosity – pore fraction (dimensionless) u_darcy – superficial velocity in the flow direction (lu/ts) u_pore – mean pore-space velocity (lu/ts) k_lu – permeability in lattice units (voxels²) k_m2 – permeability in m² (None if dx_m is None) k_mD – permeability in milliDarcy (None if dx_m is None)",
+    "crumbs": [
+      "Function reference",
+      "Core Functions",
+      "compute_permeability"
+    ]
+  },
+  {
+    "objectID": "reference/compute_permeability.html#parameters",
+    "href": "reference/compute_permeability.html#parameters",
+    "title": "compute_permeability",
+    "section": "",
+    "text": "Name\nType\nDescription\nDefault\n\n\n\n\nsource\nFlowResult\nA FlowResult returned by solve_flow(). direction and nu default to the values stored in the result.\nrequired\n\n\ndirection\n(x, y, z)\nFlow direction. If None, taken from source.direction.\n'x'\n\n\nnu\nfloat or None\nKinematic viscosity in lattice units. If None, taken from source.nu.\nNone\n\n\ndx_m\nfloat or None\nPhysical voxel size in metres. If given, results are also reported in m² and milliDarcy. E.g. dx_m=2.85e-6 for a 2.85-µm scan.\nNone\n\n\nverbose\nbool\nPrint a summary of results to stdout. Default True.\nTrue",
+    "crumbs": [
+      "Function reference",
+      "Core Functions",
+      "compute_permeability"
+    ]
+  },
+  {
+    "objectID": "reference/compute_permeability.html#returns",
+    "href": "reference/compute_permeability.html#returns",
+    "title": "compute_permeability",
+    "section": "",
+    "text": "Name\nType\nDescription\n\n\n\n\n\ndict with keys:\nporosity – pore fraction (dimensionless) u_darcy – superficial velocity in the flow direction (lu/ts) u_pore – mean pore-space velocity (lu/ts) k_lu – permeability in lattice units (voxels²) k_m2 – permeability in m² (None if dx_m is None) k_mD – permeability in milliDarcy (None if dx_m is None)",
+    "crumbs": [
+      "Function reference",
+      "Core Functions",
+      "compute_permeability"
     ]
   }
 ]

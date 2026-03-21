@@ -6,29 +6,16 @@ returned by ``solve_flow`` / ``solve_diffusion``, or a path to a .vtr file.
 
 Hydraulic conductance (single-phase flow):
 
-    Q = g_h * dP
+    $$Q = g_h * dP$$
 
 where Q is the volumetric flow rate and dP = P_in - P_out is the total pressure
 drop across the conduit.  For a circular cylinder this reduces to the
-Hagen-Poiseuille result:  g_h = pi * R^4 / (8 * mu * L).
+Hagen-Poiseuille result:  $g_h = pi * R^4 / (8 * mu * L)$.
 
 Unit conversion (lattice → physical):
     g_h_phys [m^3/(Pa·s)]  =  g_h_lu  *  nu_lu  *  dx_m^3  /  mu_phys
 
-Diffusive conductance (passive scalar diffusion):
-
-    J_total = g_d * Δc
-
-where J_total is the total diffusive flux through the conduit cross-section and
-Δc = c_in - c_out is the concentration difference.  For a circular cylinder of
-radius R this equals  g_d = pi * R^2 * D_eff / L  (Fick's law).
-
-Unit conversion (lattice → physical):
-    g_d_phys [m^3/s]  =  g_d_lu  *  D0_m2s  *  dx_m  /  D_lu
-
 where:
-    D_lu    = LBM bulk diffusivity (lattice units, default 1/4)
-    D0_m2s  = physical bulk diffusivity in m^2/s
     dx_m    = physical voxel size in metres
 """
 
@@ -53,10 +40,10 @@ def compute_hydraulic_conductance(
 ):
     """Compute hydraulic conductance g from a single-phase LBM simulation.
 
-    The conductance is defined by  Q = g * (P_in - P_out),  where Q is the
+    The conductance is defined by  $Q = g * (P_in - P_out)$,  where $Q$ is the
     volumetric flow rate through the conduit.  For a circular cylinder of
-    radius R and length L this equals the Hagen-Poiseuille value
-    g = pi * R^4 / (8 * mu * L).
+    radius $R$ and length $L$ this equals the Hagen-Poiseuille value
+    $g = pi * R^4 / (8 * mu * L)$.
 
     Parameters
     ----------

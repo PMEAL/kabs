@@ -24,6 +24,9 @@ jobs:
           cache-dependency-glob: "**/pyproject.toml"
           python-version: "3.12"
 
+      - name: Install Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
       - name: Install dependencies
         run: |
           uv sync
@@ -33,11 +36,12 @@ jobs:
         run: |
           cd docs
           uv run quartodoc build
+          uv run quarto render
 
       - name: Publish the documentation to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs/_build/html
+          publish_dir: ./docs/_site
           cname: porespy.org
           

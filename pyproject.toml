@@ -1,6 +1,6 @@
 [project]
 name = "kabs"
-version = "0.1.0"
+version = "0.0.1-dev1"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -28,3 +28,41 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.15.6",
 ]
+
+[tool.bumpversion]
+current_version = "3.0.3-dev2"
+parse = """(?x)
+    (?P<major>0|[1-9]\\d*)\\.
+    (?P<minor>0|[1-9]\\d*)\\.
+    (?P<patch>0|[1-9]\\d*)
+    (?:
+        -                             # dash separator for pre-release section
+        (?P<pre_l>[a-zA-Z-]+)         # pre-release label
+        (?P<pre_n>0|[1-9]\\d*)        # pre-release version number
+    )?                                # pre-release section is optional
+"""
+serialize = [
+    "{major}.{minor}.{patch}-{pre_l}{pre_n}",
+    "{major}.{minor}.{patch}",
+]
+search = "{current_version}"
+replace = "{new_version}"
+regex = false
+ignore_missing_version = false
+tag = true
+sign_tags = false
+tag_name = "v{new_major}.{new_minor}.{new_patch}"
+tag_message = "Bump version: {current_version} → {new_version}"
+allow_dirty = false
+commit = true
+message = "maint: bump version: {current_version} → {new_version} [skip bump]"
+commit_args = ""
+
+[tool.bumpversion.parts.pre_l]
+values = ["dev"]
+optional_value = "dev"
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = 'version = "{current_version}"'
+replace = 'version = "{new_version}"'

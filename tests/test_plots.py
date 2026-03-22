@@ -14,9 +14,16 @@ import matplotlib
 
 matplotlib.use("Agg")  # non-interactive backend; must be set before pyplot import
 
+import os
+import sys
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
+
+# pyvista screenshot() calls render() which needs an OpenGL context.
+# On headless Linux (e.g. GitHub Actions) without xvfb this segfaults.
+_headless = sys.platform == "linux" and "DISPLAY" not in os.environ
 
 from kabs._solve_flow import FlowResult
 from kabs.plots import add_streamlines, plot_cross_section, render_flow
@@ -211,6 +218,9 @@ class TestRenderFlow:
         pl = render_flow(result, off_screen=True, show=False)
         assert isinstance(pl, pyvista.Plotter)
 
+    @pytest.mark.skipif(
+        _headless, reason="screenshot requires OpenGL; no display on headless Linux"
+    )
     def test_save_screenshot(self, tmp_path):
         out = tmp_path / "test_render.png"
         render_flow(self.result, off_screen=True, show=False, save=str(out))

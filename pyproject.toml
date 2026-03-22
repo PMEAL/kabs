@@ -1,6 +1,6 @@
 [project]
 name = "kabs"
-version = "0.0.1-dev9"
+version = "0.0.1-dev10"
 description = "A tool for finding the absolute permeability from a volumetric image using the lattice Boltzmann method"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -30,7 +30,7 @@ dev = [
 ]
 
 [tool.bumpversion]
-current_version = "0.0.1-dev9"
+current_version = "0.0.1-dev10"
 parse = """(?x)
     (?P<major>0|[1-9]\\d*)\\.
     (?P<minor>0|[1-9]\\d*)\\.

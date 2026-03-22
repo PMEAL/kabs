@@ -819,7 +819,7 @@ wheels = [
 
 [[package]]
 name = "kabs"
-version = "0.0.1.dev21"
+version = "0.0.1.dev22"
 source = { editable = "." }
 dependencies = [
     { name = "imageio" },

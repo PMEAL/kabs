@@ -194,6 +194,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <section id="kabs" class="level1">
 <h1><code>kabs</code></h1>
+<p><a href="https://github.com/PMEAL/kabs/actions/workflows/tests.yml"><img src="https://github.com/PMEAL/kabs/actions/workflows/tests.yml/badge.svg" class="img-fluid" alt="Tests"></a> <a href="https://codecov.io/gh/PMEAL/kabs"><img src="https://codecov.io/gh/PMEAL/kabs/branch/dev/graph/badge.svg" class="img-fluid" alt="codecov"></a></p>
 <p><code>kabs</code> computes the absolute (Darcy) permeability of a porous material from its 3D tomographic image using the Lattice Boltzmann Method (LBM). Given a binary voxel image of the pore space, it solves single-phase incompressible creeping flow, returning results in lattice units or physical units.</p>
 <p><img src="taichi_lbm.png" class="img-fluid"></p>
 <p>The LBM implementation is adapted from <a href="https://github.com/yjhp1016/taichi_LBM3D">Taichi-LBM3D</a> (<a href="https://doi.org/10.3390/fluids7080270">DOI</a>) by Jianhui Yang.</p>
@@ -218,7 +219,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>im <span class="op">=</span> ps.generators.cylinders([<span class="dv">200</span>, <span class="dv">200</span>, <span class="dv">200</span>], r<span class="op">=</span><span class="dv">10</span>, porosity<span class="op">=</span><span class="fl">0.7</span>).astype(<span class="bu">int</span>)</span>
 <span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Run the LBM simulation and get a FlowResult back</span></span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> solve_flow(im, direction<span class="op">=</span><span class="st">"x"</span>, export_vtk<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> solve_flow(im, direction<span class="op">=</span><span class="st">"x"</span>)</span>
 <span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Optionally save to a VTR file for later inspection</span></span>
 <span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>result.export_to_vtk(<span class="st">"sample"</span>)</span>
@@ -258,29 +259,32 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> solve_flow(im, direction<span class="op">=</span><span class="st">"x"</span>, n_steps<span class="op">=</span><span class="dv">5000</span>, tol<span class="op">=</span><span class="va">None</span>)</span>
 <span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>compute_permeability(result)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>The convergence check fires every <code>log_every</code> steps (default 500), so the true stopping point is rounded to that interval.</p>
+<p>To save the converged result to a VTR file, call <code>export_to_vtk</code> on the returned object:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> solve_flow(im, direction<span class="op">=</span><span class="st">"x"</span>, tol<span class="op">=</span><span class="fl">1e-4</span>)</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>result.export_to_vtk(<span class="st">"sample"</span>)  <span class="co"># writes sample-&lt;step&gt;-x.vtr</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="full-permeability-tensor" class="level3">
 <h3 class="anchored" data-anchor-id="full-permeability-tensor">Full permeability tensor</h3>
 <p>For anisotropic materials, run all three directions:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>results <span class="op">=</span> {}</span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> ax <span class="kw">in</span> (<span class="st">"x"</span>, <span class="st">"y"</span>, <span class="st">"z"</span>):</span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> solve_flow(im, direction<span class="op">=</span>ax, export_vtk<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    results[ax] <span class="op">=</span> compute_permeability(result, dx_m<span class="op">=</span><span class="fl">2.85e-6</span>)</span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Kx=</span><span class="sc">{</span>results[<span class="st">'x'</span>][<span class="st">'k_mD'</span>]<span class="sc">:.2f}</span><span class="ss">  Ky=</span><span class="sc">{</span>results[<span class="st">'y'</span>][<span class="st">'k_mD'</span>]<span class="sc">:.2f}</span><span class="ss">  Kz=</span><span class="sc">{</span>results[<span class="st">'z'</span>][<span class="st">'k_mD'</span>]<span class="sc">:.2f}</span><span class="ss">  mD"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>results <span class="op">=</span> {}</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> ax <span class="kw">in</span> (<span class="st">"x"</span>, <span class="st">"y"</span>, <span class="st">"z"</span>):</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> solve_flow(im, direction<span class="op">=</span>ax)</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    results[ax] <span class="op">=</span> compute_permeability(result, dx_m<span class="op">=</span><span class="fl">2.85e-6</span>)</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Kx=</span><span class="sc">{</span>results[<span class="st">'x'</span>][<span class="st">'k_mD'</span>]<span class="sc">:.2f}</span><span class="ss">  Ky=</span><span class="sc">{</span>results[<span class="st">'y'</span>][<span class="st">'k_mD'</span>]<span class="sc">:.2f}</span><span class="ss">  Kz=</span><span class="sc">{</span>results[<span class="st">'z'</span>][<span class="st">'k_mD'</span>]<span class="sc">:.2f}</span><span class="ss">  mD"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="loading-results-from-a-vtr-file" class="level3">
 <h3 class="anchored" data-anchor-id="loading-results-from-a-vtr-file">Loading results from a VTR file</h3>
 <p><code>solve_flow</code> returns a <code>FlowResult</code> you can use immediately, but if you have a previously saved <code>.vtr</code> file you can reload it with <code>read_flow_vtr</code>:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> kabs <span class="im">import</span> read_flow_vtr, compute_permeability</span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> read_flow_vtr(<span class="st">"sample-1000-x.vtr"</span>)</span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>results <span class="op">=</span> compute_permeability(result, dx_m<span class="op">=</span><span class="fl">2.85e-6</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> kabs <span class="im">import</span> read_flow_vtr, compute_permeability</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> read_flow_vtr(<span class="st">"sample-1000-x.vtr"</span>)</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>results <span class="op">=</span> compute_permeability(result, dx_m<span class="op">=</span><span class="fl">2.85e-6</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="memory-efficient-sparse-storage" class="level3">
 <h3 class="anchored" data-anchor-id="memory-efficient-sparse-storage">Memory-efficient sparse storage</h3>
 <p>For images with a high solid fraction, enable sparse storage so only pore voxels are allocated in GPU memory:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>solver <span class="op">=</span> solve_flow(im, direction<span class="op">=</span><span class="st">"x"</span>, sparse<span class="op">=</span><span class="va">True</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> solve_flow(im, direction<span class="op">=</span><span class="st">"x"</span>, sparse<span class="op">=</span><span class="va">True</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 </section>
 <section id="return-values-permeability" class="level2">

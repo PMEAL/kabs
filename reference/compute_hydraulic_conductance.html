@@ -307,7 +307,7 @@ window.Quarto = {
 <section id="kabs.compute_hydraulic_conductance" class="level1">
 <h1>compute_hydraulic_conductance</h1>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>compute_hydraulic_conductance(</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    source,</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    soln,</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    direction<span class="op">=</span><span class="va">None</span>,</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    nu<span class="op">=</span><span class="va">None</span>,</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    dx_m<span class="op">=</span><span class="va">None</span>,</span>
@@ -320,10 +320,10 @@ window.Quarto = {
 <h2 class="doc-section doc-section-parameters anchored" data-anchor-id="parameters">Parameters</h2>
 <table class="caption-top table">
 <colgroup>
-<col style="width: 3%">
-<col style="width: 11%">
-<col style="width: 80%">
-<col style="width: 4%">
+<col style="width: 6%">
+<col style="width: 8%">
+<col style="width: 78%">
+<col style="width: 6%">
 </colgroup>
 <thead>
 <tr class="header">
@@ -335,21 +335,21 @@ window.Quarto = {
 </thead>
 <tbody>
 <tr class="odd">
-<td>source</td>
-<td>FlowResult or str / path - like</td>
-<td>Either a <code>FlowResult</code> returned by <code>solve_flow()</code>, or a path to a <code>.vtr</code> file written by <code>SinglePhaseSolver.export_VTK()</code>. When a <code>FlowResult</code> is given, <code>direction</code> and <code>nu</code> default to the values stored in the result.</td>
+<td>soln</td>
+<td>FlowResult</td>
+<td>A <code>FlowResult</code> returned by <code>solve_flow()</code>. <code>direction</code> and <code>nu</code> default to the values stored in the result.</td>
 <td><em>required</em></td>
 </tr>
 <tr class="even">
 <td>direction</td>
 <td>(x, y, z)</td>
-<td>Flow direction. If <em>None</em> and <code>source</code> is a <code>FlowResult</code>, taken from <code>source.direction</code>; otherwise defaults to <code>'x'</code>.</td>
+<td>Flow direction. If <em>None</em>, taken from <code>soln.direction</code>.</td>
 <td><code>'x'</code></td>
 </tr>
 <tr class="odd">
 <td>nu</td>
 <td>float or None</td>
-<td>Kinematic viscosity used in the LBM simulation (lattice units). If <em>None</em> and <code>source</code> is a <code>FlowResult</code>, taken from <code>source.nu</code>; otherwise defaults to 1/6.</td>
+<td>Kinematic viscosity used in the LBM simulation (lattice units). If <em>None</em>, taken from <code>soln.nu</code>.</td>
 <td><code>None</code></td>
 </tr>
 <tr class="even">
@@ -379,7 +379,7 @@ window.Quarto = {
 <colgroup>
 <col style="width: 1%">
 <col style="width: 3%">
-<col style="width: 94%">
+<col style="width: 95%">
 </colgroup>
 <thead>
 <tr class="header">
@@ -392,7 +392,7 @@ window.Quarto = {
 <tr class="odd">
 <td></td>
 <td>dict with keys:</td>
-<td>Q_lu – volumetric flow rate in lattice units (lu^3/ts) dP_lu – total pressure drop in lattice units g_lu – conductance in lattice units (lu^3/ts / lu_pressure) Q_m3s – volumetric flow rate in m^3/s (None if dx_m/mu_phys not given) dP_Pa – total pressure drop in Pa (None if dx_m/mu_phys not given) g_SI – conductance in m^3/(Pa·s) (None if dx_m/mu_phys not given)</td>
+<td>Q_lu – volumetric flow rate in lattice units (lu^3/ts) dP_lu – total pressure drop in lattice units g_lu – conductance in lattice units (lu^3/ts / lu_pressure) Q_m3s – volumetric flow rate in m^3/s (None if dx_m/mu_phys not given) dP_Pa – total pressure drop in Pa (None if dx_m/mu_phys not given) g_SI – conductance in m^3/(Pa·s) (None if dx_m/mu_phys not given) summary – human-readable result summary string (always populated)</td>
 </tr>
 </tbody>
 </table>

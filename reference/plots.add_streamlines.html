@@ -261,7 +261,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#kabs.plots.add_streamlines" id="toc-kabs.plots.add_streamlines" class="nav-link active" data-scroll-target="#kabs.plots.add_streamlines">plots.add_streamlines</a></li>
+  <li><a href="#kabs.plots.add_streamlines" id="toc-kabs.plots.add_streamlines" class="nav-link active" data-scroll-target="#kabs.plots.add_streamlines">plots.add_streamlines</a>
+  <ul class="collapse">
+  <li><a href="#parameters" id="toc-parameters" class="nav-link" data-scroll-target="#parameters">Parameters</a></li>
+  <li><a href="#returns" id="toc-returns" class="nav-link" data-scroll-target="#returns">Returns</a></li>
+  </ul></li>
   </ul>
 </nav>
     </div>
@@ -273,9 +277,75 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <section id="kabs.plots.add_streamlines" class="level1">
 <h1>plots.add_streamlines</h1>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>plots.add_streamlines(source, ax, axis, <span class="op">**</span>kwargs)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>plots.add_streamlines(soln, ax, axis<span class="op">=</span><span class="va">None</span>, <span class="op">**</span>kwargs)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Overlay 2D streamlines on an existing Matplotlib axes.</p>
+<p>Extracts the two in-plane velocity components at the midpoint slice along the given axis, then calls <code>ax.streamplot</code> to draw the streamlines.</p>
+<section id="parameters" class="level2 doc-section doc-section-parameters">
+<h2 class="doc-section doc-section-parameters anchored" data-anchor-id="parameters">Parameters</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 3%">
+<col style="width: 8%">
+<col style="width: 83%">
+<col style="width: 4%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>soln</td>
+<td>FlowResult</td>
+<td>Converged flow result returned by <code>solve_flow()</code> or <code>read_flow_vtr()</code>.</td>
+<td><em>required</em></td>
+</tr>
+<tr class="even">
+<td>ax</td>
+<td>matplotlib.axes.Axes</td>
+<td>The axes object on which to draw the streamlines.</td>
+<td><em>required</em></td>
+</tr>
+<tr class="odd">
+<td>axis</td>
+<td>int</td>
+<td>The normal axis of the 2D slice to visualize: <code>0</code> → yz-plane (x midpoint), <code>1</code> → xz-plane (y midpoint), <code>2</code> → xy-plane (z midpoint). If <code>None</code>, then an axis perpendicular to the direction of flow will be used.</td>
+<td><code>None</code></td>
+</tr>
+<tr class="even">
+<td>**kwargs</td>
+<td></td>
+<td>Additional keyword arguments forwarded directly to <code>ax.streamplot</code> (e.g.&nbsp;<code>color='white'</code>, <code>density=1.5</code>).</td>
+<td><code>{}</code></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="returns" class="level2 doc-section doc-section-returns">
+<h2 class="doc-section doc-section-returns anchored" data-anchor-id="returns">Returns</h2>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>ax</td>
+<td>matplotlib.axes.Axes</td>
+<td>The axes with streamlines added.</td>
+</tr>
+</tbody>
+</table>
 
 
+</section>
 </section>
 
 </main> <!-- /main -->

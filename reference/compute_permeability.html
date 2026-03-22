@@ -277,7 +277,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <section id="kabs.compute_permeability" class="level1">
 <h1>compute_permeability</h1>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>compute_permeability(source, direction<span class="op">=</span><span class="va">None</span>, nu<span class="op">=</span><span class="va">None</span>, dx_m<span class="op">=</span><span class="va">None</span>, verbose<span class="op">=</span><span class="va">True</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>compute_permeability(soln, direction<span class="op">=</span><span class="va">None</span>, nu<span class="op">=</span><span class="va">None</span>, dx_m<span class="op">=</span><span class="va">None</span>, verbose<span class="op">=</span><span class="va">True</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Compute Darcy permeability from a single-phase LBM simulation.</p>
 <section id="parameters" class="level2 doc-section doc-section-parameters">
 <h2 class="doc-section doc-section-parameters anchored" data-anchor-id="parameters">Parameters</h2>
@@ -298,7 +298,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </thead>
 <tbody>
 <tr class="odd">
-<td>source</td>
+<td>soln</td>
 <td>FlowResult</td>
 <td>A <code>FlowResult</code> returned by <code>solve_flow()</code>. <code>direction</code> and <code>nu</code> default to the values stored in the result.</td>
 <td><em>required</em></td>
@@ -306,13 +306,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <tr class="even">
 <td>direction</td>
 <td>(x, y, z)</td>
-<td>Flow direction. If <em>None</em>, taken from <code>source.direction</code>.</td>
+<td>Flow direction. If <em>None</em>, taken from <code>soln.direction</code>.</td>
 <td><code>'x'</code></td>
 </tr>
 <tr class="odd">
 <td>nu</td>
 <td>float or None</td>
-<td>Kinematic viscosity in lattice units. If <em>None</em>, taken from <code>source.nu</code>.</td>
+<td>Kinematic viscosity in lattice units. If <em>None</em>, taken from <code>soln.nu</code>.</td>
 <td><code>None</code></td>
 </tr>
 <tr class="even">
@@ -334,9 +334,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 class="doc-section doc-section-returns anchored" data-anchor-id="returns">Returns</h2>
 <table class="caption-top table">
 <colgroup>
-<col style="width: 2%">
+<col style="width: 1%">
 <col style="width: 4%">
-<col style="width: 92%">
+<col style="width: 94%">
 </colgroup>
 <thead>
 <tr class="header">
@@ -349,7 +349,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <tr class="odd">
 <td></td>
 <td>dict with keys:</td>
-<td>porosity – pore fraction (dimensionless) u_darcy – superficial velocity in the flow direction (lu/ts) u_pore – mean pore-space velocity (lu/ts) k_lu – permeability in lattice units (voxels²) k_m2 – permeability in m² (None if dx_m is None) k_mD – permeability in milliDarcy (None if dx_m is None)</td>
+<td>porosity – pore fraction (dimensionless) u_darcy – superficial velocity in the flow direction (lu/ts) u_pore – mean pore-space velocity (lu/ts) k_lu – permeability in lattice units (voxels²) k_m2 – permeability in m² (None if dx_m is None) k_mD – permeability in milliDarcy (None if dx_m is None) summary – human-readable result summary string (always populated)</td>
 </tr>
 </tbody>
 </table>

@@ -277,15 +277,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <section id="kabs.plots.plot_cross_section" class="level1">
 <h1>plots.plot_cross_section</h1>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>plots.plot_cross_section(source, direction<span class="op">=</span><span class="st">'x'</span>, axis<span class="op">=</span><span class="dv">2</span>, streamlines<span class="op">=</span><span class="va">None</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>plots.plot_cross_section(soln, direction<span class="op">=</span><span class="st">'x'</span>, axis<span class="op">=</span><span class="dv">2</span>, streamlines<span class="op">=</span><span class="va">None</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Generate a 2D image of the velocity field for plotting</p>
 <section id="parameters" class="level2 doc-section doc-section-parameters">
 <h2 class="doc-section doc-section-parameters anchored" data-anchor-id="parameters">Parameters</h2>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 3%">
-<col style="width: 5%">
-<col style="width: 87%">
+<col style="width: 4%">
+<col style="width: 88%">
 <col style="width: 3%">
 </colgroup>
 <thead>
@@ -298,9 +298,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </thead>
 <tbody>
 <tr class="odd">
-<td>source</td>
-<td>FlowResult or str</td>
-<td>Either a <code>FlowResult</code> returned by <code>solve_flow()</code>, or a path to a <code>.vtr</code> file written by <code>SinglePhaseSolver.export_VTK()</code>.</td>
+<td>soln</td>
+<td>FlowResult</td>
+<td>A <code>FlowResult</code> returned by <code>solve_flow()</code> or <code>read_flow_vtr()</code>.</td>
 <td><em>required</em></td>
 </tr>
 <tr class="even">

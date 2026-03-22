@@ -44,8 +44,8 @@ class FlowResult:
         self.nu = nu
         self._solver = solver
         self.solid = solver.solid.to_numpy()
-        self.rho = solver.rho.to_numpy()
-        self.velocity = solver.v.to_numpy()  # shape (nx, ny, nz, 3)
+        self.rho = solver.get_rho()
+        self.velocity = solver.get_velocity()  # shape (nx, ny, nz, 3)
 
     @classmethod
     def from_arrays(cls, solid, rho, velocity, direction=None, nu=None):

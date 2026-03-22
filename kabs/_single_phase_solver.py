@@ -519,6 +519,14 @@ class SinglePhaseSolver:
         self.bc_z_right = 1
         self.rho_bczr = rho
 
+    def get_rho(self):
+        """Return the density field as a numpy array trimmed to the domain shape."""
+        return self.rho.to_numpy()[: self.nx, : self.ny, : self.nz]
+
+    def get_velocity(self):
+        """Return the velocity field as a numpy array trimmed to the domain shape."""
+        return self.v.to_numpy()[: self.nx, : self.ny, : self.nz]
+
     def set_viscosity(self, niu):
         self.niu = niu
 

@@ -2,3 +2,4 @@ __pycache__
 *.vtr
 .DS_Store
 .coverage
+coverage.xml

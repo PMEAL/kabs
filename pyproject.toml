@@ -63,6 +63,9 @@ commit_args = ""
 values = ["dev"]
 optional_value = "dev"
 
+[tool.coverage.run]
+source = ["kabs"]
+
 [tool.coverage.report]
 exclude_lines = [
     "pragma: no cover",

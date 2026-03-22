@@ -21,14 +21,14 @@ import numpy as np
 __all__ = ["compute_permeability"]
 
 
-_RHO_IN  = 1.00
+_RHO_IN = 1.00
 _RHO_OUT = 0.99
 
 
 def _compute_permeability_core(solid, velocity, direction, nu, dx_m, verbose):
     """Compute permeability given numpy arrays (shared by file and object paths)."""
     pore_mask = solid == 0
-    porosity  = pore_mask.sum() / pore_mask.size
+    porosity = pore_mask.sum() / pore_mask.size
 
     vx = velocity[..., 0]
     vy = velocity[..., 1]
@@ -36,47 +36,63 @@ def _compute_permeability_core(solid, velocity, direction, nu, dx_m, verbose):
     nx, ny, nz = solid.shape
 
     v_flow = {"x": vx, "y": vy, "z": vz}[direction]
-    L_dir  = {"x": nx, "y": ny, "z": nz}[direction]
+    L_dir = {"x": nx, "y": ny, "z": nz}[direction]
 
     u_darcy = float(np.mean(v_flow))
-    u_pore  = float(np.mean(v_flow[pore_mask]))
+    u_pore = float(np.mean(v_flow[pore_mask]))
 
-    cs2   = 1.0 / 3.0
-    L     = L_dir
-    dP    = (_RHO_IN - _RHO_OUT) * cs2
+    cs2 = 1.0 / 3.0
+    L = L_dir
+    dP = (_RHO_IN - _RHO_OUT) * cs2
     gradP = dP / L
 
-    mu   = nu
+    mu = nu
     k_lu = u_darcy * mu / gradP
 
     k_m2 = k_mD = None
     if dx_m is not None:
-        k_m2 = k_lu * dx_m ** 2
+        k_m2 = k_lu * dx_m**2
         k_mD = k_m2 / 9.869233e-16
 
+    all_v = {"x": vx, "y": vy, "z": vz}
+    transverse = [c for c in ("x", "y", "z") if c != direction]
+    lines = [
+        f"",
+        f"Flow direction        = {direction}",
+        f"Porosity (phi)        = {porosity:.4f}",
+        f"Darcy velocity  u_D   = {u_darcy:.6e}  [lu/ts]",
+        f"Mean pore vel   u_p   = {u_pore:.6e}  [lu/ts]",
+        f"Check: u_D / phi      = {u_darcy / porosity:.6e}  (should ≈ u_p)",
+        f"",
+        f"Pressure drop   dP    = {dP:.6f}",
+        f"Domain length   L     = {L}  [lu]",
+        f"Pressure grad |dP/dL| = {gradP:.6e}",
+        f"",
+        f"Permeability  k       = {k_lu:.6e}  [lu^2  i.e. voxels^2]",
+    ]
+    if dx_m is not None:
+        lines += [
+            f"",
+            f"With dx = {dx_m * 1e6:.3f} microns:",
+            f"  k = {k_m2:.4e}  m^2",
+            f"  k = {k_mD:.4f}   mD (milliDarcy)",
+        ]
+    else:
+        lines.append("To get physical units: pass dx_m (voxel size in metres).")
+    lines += [
+        f"",
+        f"--- Sanity checks ---",
+        f"v{direction} pore: min={v_flow[pore_mask].min():.3e}  max={v_flow[pore_mask].max():.3e}",
+    ]
+    for c in transverse:
+        vc = all_v[c]
+        lines.append(
+            f"v{c} pore: min={vc[pore_mask].min():.3e}  max={vc[pore_mask].max():.3e}  (should be ~0)"
+        )
+    summary = "\n".join(lines)
+
     if verbose:
-        print(f"\nFlow direction        = {direction}")
-        print(f"Porosity (phi)        = {porosity:.4f}")
-        print(f"Darcy velocity  u_D   = {u_darcy:.6e}  [lu/ts]")
-        print(f"Mean pore vel   u_p   = {u_pore:.6e}  [lu/ts]")
-        print(f"Check: u_D / phi      = {u_darcy / porosity:.6e}  (should ≈ u_p)")
-        print(f"\nPressure drop   dP    = {dP:.6f}")
-        print(f"Domain length   L     = {L}  [lu]")
-        print(f"Pressure grad |dP/dL| = {gradP:.6e}")
-        print(f"\nPermeability  k       = {k_lu:.6e}  [lu^2  i.e. voxels^2]")
-        if dx_m is not None:
-            print(f"\nWith dx = {dx_m * 1e6:.3f} microns:")
-            print(f"  k = {k_m2:.4e}  m^2")
-            print(f"  k = {k_mD:.4f}   mD (milliDarcy)")
-        else:
-            print("\nTo get physical units: pass dx_m (voxel size in metres).")
-        all_v = {"x": vx, "y": vy, "z": vz}
-        transverse = [c for c in ("x", "y", "z") if c != direction]
-        print("\n--- Sanity checks ---")
-        print(f"v{direction} pore: min={v_flow[pore_mask].min():.3e}  max={v_flow[pore_mask].max():.3e}")
-        for c in transverse:
-            vc = all_v[c]
-            print(f"v{c} pore: min={vc[pore_mask].min():.3e}  max={vc[pore_mask].max():.3e}  (should be ~0)")
+        print(summary)
 
     return {
         "porosity": float(porosity),
@@ -85,11 +101,12 @@ def _compute_permeability_core(solid, velocity, direction, nu, dx_m, verbose):
         "k_lu": k_lu,
         "k_m2": k_m2,
         "k_mD": k_mD,
+        "summary": summary,
     }
 
 
 def compute_permeability(
-    source,
+    soln,
     direction=None,
     nu=None,
     dx_m=None,
@@ -99,14 +116,14 @@ def compute_permeability(
 
     Parameters
     ----------
-    source : FlowResult
+    soln : FlowResult
         A ``FlowResult`` returned by ``solve_flow()``.  ``direction`` and
         ``nu`` default to the values stored in the result.
     direction : {'x', 'y', 'z'} or None
-        Flow direction.  If *None*, taken from ``source.direction``.
+        Flow direction.  If *None*, taken from ``soln.direction``.
     nu : float or None
         Kinematic viscosity in lattice units.  If *None*, taken from
-        ``source.nu``.
+        ``soln.nu``.
     dx_m : float or None
         Physical voxel size in metres.  If given, results are also reported
         in m² and milliDarcy.  E.g. ``dx_m=2.85e-6`` for a 2.85-µm scan.
@@ -122,11 +139,12 @@ def compute_permeability(
         k_lu       – permeability in lattice units (voxels²)
         k_m2       – permeability in m²  (None if dx_m is None)
         k_mD       – permeability in milliDarcy  (None if dx_m is None)
+        summary    – human-readable result summary string (always populated)
     """
-    _dir = direction if direction is not None else source.direction
-    _nu  = nu        if nu        is not None else source.nu
-    solid    = source.solid
-    velocity = source.velocity
+    _dir = direction if direction is not None else soln.direction
+    _nu = nu if nu is not None else soln.nu
+    solid = soln.solid
+    velocity = soln.velocity
 
     _dir = _dir.lower()
     if _dir not in ("x", "y", "z"):

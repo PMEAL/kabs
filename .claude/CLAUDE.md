@@ -6,7 +6,7 @@
 
 ### Source layout
 - `kabs/_single_phase_solver.py` — `SinglePhaseSolver` class: D3Q19 MRT-LBM Taichi kernels (collision, streaming, BCs)
-- `kabs/_solve_flow.py` — `solve_flow()` entry point and `FlowResult` container class; sets BCs, runs loop, handles convergence/VTK export; returns a `FlowResult`
+- `kabs/_solve_flow.py` — `solve_flow()` entry point and `FlowResult` container class; sets BCs, runs loop, handles convergence; returns a `FlowResult`
 - `kabs/_compute_permeability.py` — `compute_permeability()`: accepts a `FlowResult`, applies Darcy's law
 - `kabs/_compute_hydraulic_conductance.py` — `compute_hydraulic_conductance()`: accepts a `FlowResult`, computes Q/ΔP conductance
 - `kabs/utils.py` — `read_flow_vtr()` / `write_flow_vtr()`: VTR file I/O (pure `numpy` + `struct`, no pyvista dependency); embeds `direction` and `nu` as an XML comment for round-trip fidelity
@@ -31,8 +31,8 @@
 - For the cylinders test image (`r=10`, `ν=1/6`): converges around 500–1000 steps
 
 ### VTR output
-- Written via `result.export_to_vtk(prefix)` or automatically when `export_vtk=True` (default)
-- Filename: `{prefix}-{final_step}-{axis}.vtr`  (step count reflects actual converged step, not `n_steps`)
+- Written via `result.export_to_vtk(prefix)` on the `FlowResult`, or via `write_flow_vtr(prefix, result)` from `kabs.utils`
+- Filename: `{prefix}.vtr`  (caller controls the full prefix, including any step/axis suffix if desired)
 - Flow VTR contains: `Solid` (int8), `rho` (float32), `velocity` (3-component float32)
 - `direction` and `nu` embedded as an XML comment (`<!-- kabs-meta ... -->`) for round-trip fidelity
 - Read back with `read_flow_vtr(path)` from `kabs.utils`; uses only `numpy` + `struct` (no pyvista dependency)

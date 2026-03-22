@@ -11,15 +11,14 @@ __all__ = [
 ]
 
 
-def plot_cross_section(source, direction="x", axis=2, streamlines=None):
+def plot_cross_section(soln, direction="x", axis=2, streamlines=None):
     r"""
     Generate a 2D image of the velocity field for plotting
 
     Parameters
     ----------
-    source : FlowResult or str
-        Either a ``FlowResult`` returned by ``solve_flow()``, or a path to a
-        ``.vtr`` file written by ``SinglePhaseSolver.export_VTK()``.
+    soln : FlowResult
+        A ``FlowResult`` returned by ``solve_flow()`` or ``read_flow_vtr()``.
     direction : str
         Specifies which component of the velocity vector to plot.
         The default is "x". "all" will plot the magnitude of the
@@ -40,7 +39,7 @@ def plot_cross_section(source, direction="x", axis=2, streamlines=None):
     velocity : ndarray
         A 2D array with voxel value corresponding to the velocity.
     """
-    velocity = source.velocity
+    velocity = soln.velocity
 
     if direction in [0, "x", "X"]:
         v_dir = 0
@@ -62,9 +61,39 @@ def plot_cross_section(source, direction="x", axis=2, streamlines=None):
     return vx_long
 
 
-def add_streamlines(source, ax, axis, **kwargs):
-    velocity = source.velocity
+def add_streamlines(soln, ax, axis=None, **kwargs):
+    r"""
+    Overlay 2D streamlines on an existing Matplotlib axes.
+
+    Extracts the two in-plane velocity components at the midpoint slice along
+    the given axis, then calls ``ax.streamplot`` to draw the streamlines.
+
+    Parameters
+    ----------
+    soln : FlowResult
+        Converged flow result returned by ``solve_flow()`` or
+        ``read_flow_vtr()``.
+    ax : matplotlib.axes.Axes
+        The axes object on which to draw the streamlines.
+    axis : int
+        The normal axis of the 2D slice to visualize:
+        ``0`` → yz-plane (x midpoint), ``1`` → xz-plane (y midpoint),
+        ``2`` → xy-plane (z midpoint). If `None`, then an axis
+        perpendicular to the direction of flow will be used.
+    **kwargs
+        Additional keyword arguments forwarded directly to
+        ``ax.streamplot`` (e.g. ``color='white'``, ``density=1.5``).
+
+    Returns
+    -------
+    ax : matplotlib.axes.Axes
+        The axes with streamlines added.
+    """
+    velocity = soln.velocity
     mid = [int(s / 2) for s in velocity.shape[:3]]
+    if axis is None:
+        options = {"x": 0, "y": 1, "z": 2}
+        axis = options[soln.direction]
     if axis == 0:
         U = velocity[mid[0], :, :, 1]
         V = velocity[mid[0], :, :, 2]
@@ -161,7 +190,9 @@ def render_flow(
     ).astype(np.float32)
 
     # --- Solid surface: threshold to keep solid voxels, then extract faces ---
-    solid_surf = grid.threshold(0.5, scalars="solid").extract_surface(algorithm='dataset_surface')
+    solid_surf = grid.threshold(0.5, scalars="solid").extract_surface(
+        algorithm="dataset_surface"
+    )
 
     # --- Convert to point data so the streamline integrator can interpolate ---
     grid_pts = grid.cell_data_to_point_data()

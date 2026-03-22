@@ -1,7 +1,7 @@
 [project]
 name = "kabs"
-version = "0.0.1"
-description = "Add your description here"
+version = "0.0.1-dev22"
+description = "A tool for finding the absolute permeability from a volumetric image using the lattice Boltzmann method"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -26,11 +26,12 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "pytest>=8.0",
+    "pytest-cov>=7.1.0",
     "ruff>=0.15.6",
 ]
 
 [tool.bumpversion]
-current_version = "3.0.3-dev2"
+current_version = "0.0.1-dev22"
 parse = """(?x)
     (?P<major>0|[1-9]\\d*)\\.
     (?P<minor>0|[1-9]\\d*)\\.
@@ -55,12 +56,22 @@ tag_name = "v{new_major}.{new_minor}.{new_patch}"
 tag_message = "Bump version: {current_version} → {new_version}"
 allow_dirty = false
 commit = true
-message = "maint: bump version: {current_version} → {new_version} [skip bump]"
+message = "maint: bump version: {current_version} → {new_version} [skip bump] [skip ci]"
 commit_args = ""
 
 [tool.bumpversion.parts.pre_l]
 values = ["dev"]
 optional_value = "dev"
+
+[tool.coverage.run]
+source = ["kabs"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "@ti\\.kernel",
+    "@ti\\.func",
+]
 
 [[tool.bumpversion.files]]
 filename = "pyproject.toml"

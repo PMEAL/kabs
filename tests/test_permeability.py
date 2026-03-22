@@ -49,14 +49,22 @@ _NU = 1.0 / 6.0
 _CENTRES = [(13, 13), (13, 37), (37, 13), (37, 37)]
 
 
-def _bundle_image():
-    """Binary image (1=pore) of 4 parallel cylindrical tubes along x."""
-    im = np.zeros((_L, _NY, _NZ), dtype=int)
-    y, z = np.mgrid[0:_NY, 0:_NZ]
-    for cy, cz in _CENTRES:
-        pore = (y - cy) ** 2 + (z - cz) ** 2 <= _R**2
-        im[:, pore] = 1
-    return im
+def _bundle_image(direction="x"):
+    """Binary image (1=pore) of 4 parallel cylindrical tubes along the given axis."""
+    a, b = np.mgrid[0:_NY, 0:_NZ]
+    cross = np.zeros((_NY, _NZ), dtype=bool)
+    for ca, cb in _CENTRES:
+        cross |= (a - ca) ** 2 + (b - cb) ** 2 <= _R**2
+    if direction == "x":
+        return np.broadcast_to(cross[np.newaxis], (_L, _NY, _NZ)).copy().astype(int)
+    elif direction == "y":
+        return (
+            np.broadcast_to(cross[:, np.newaxis, :], (_NY, _L, _NZ)).copy().astype(int)
+        )
+    else:  # z
+        return (
+            np.broadcast_to(cross[:, :, np.newaxis], (_NY, _NZ, _L)).copy().astype(int)
+        )
 
 
 def _k_analytical():
@@ -74,7 +82,6 @@ _SOLVE_KW = dict(
     n_steps=4000,
     tol=1e-3,
     log_every=200,
-    export_vtk=False,
     verbose=False,
 )
 
@@ -114,6 +121,99 @@ class TestBundlePermeability:
         out = compute_permeability(self.result, dx_m=dx, verbose=False)
         assert out["k_m2"] == pytest.approx(out["k_lu"] * dx**2, rel=1e-6)
         assert out["k_mD"] == pytest.approx(out["k_m2"] / 9.869233e-16, rel=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# Permeability tensor: all three BC-setter pairs must drive correct flow
+# ---------------------------------------------------------------------------
+
+_SOLVE_KW_BASE = dict(
+    nu=_NU,
+    n_steps=4000,
+    tol=1e-3,
+    log_every=200,
+    verbose=False,
+)
+
+
+class TestPermeabilityTensor:
+    """Run the isotropic bundle image in all three directions.
+
+    Each direction exercises a different pair of BC setters:
+      x → set_bc_rho_x0 / set_bc_rho_x1
+      y → set_bc_rho_y0 / set_bc_rho_y1
+      z → set_bc_rho_z0 / set_bc_rho_z1
+
+    Because the cross-section geometry is identical in all cases, all three
+    permeabilities must agree with each other and with the analytical value.
+    """
+
+    @classmethod
+    def setup_class(cls):
+        cls.results = {
+            ax: solve_flow(_bundle_image(ax), direction=ax, **_SOLVE_KW_BASE)
+            for ax in ("x", "y", "z")
+        }
+        cls.k = {
+            ax: compute_permeability(cls.results[ax], verbose=False)["k_lu"]
+            for ax in ("x", "y", "z")
+        }
+
+    def test_kx_vs_analytical(self):
+        assert self.k["x"] == pytest.approx(_k_analytical(), rel=0.07)
+
+    def test_ky_vs_analytical(self):
+        assert self.k["y"] == pytest.approx(_k_analytical(), rel=0.07)
+
+    def test_kz_vs_analytical(self):
+        assert self.k["z"] == pytest.approx(_k_analytical(), rel=0.07)
+
+    def test_all_directions_agree(self):
+        """Isotropic geometry: kx, ky, kz must all match within 2 %."""
+        assert self.k["y"] == pytest.approx(self.k["x"], rel=0.02)
+        assert self.k["z"] == pytest.approx(self.k["x"], rel=0.02)
+
+    def test_darcy_velocity_positive_all_directions(self):
+        """Each simulation must drive flow in the positive pressure-gradient direction."""
+        for ax in ("x", "y", "z"):
+            out = compute_permeability(self.results[ax], verbose=False)
+            assert out["u_darcy"] > 0.0, f"u_darcy not positive for direction={ax!r}"
+
+
+# ---------------------------------------------------------------------------
+# Sparse storage: results must match the dense solver
+# ---------------------------------------------------------------------------
+
+_SOLVE_KW_SPARSE = {**_SOLVE_KW, "sparse": True}
+
+
+class TestSparsePermeability:
+    """Sparse storage should produce the same physics as dense storage."""
+
+    @classmethod
+    def setup_class(cls):
+        cls.result_dense = solve_flow(_bundle_image(), **_SOLVE_KW)
+        cls.result_sparse = solve_flow(_bundle_image(), **_SOLVE_KW_SPARSE)
+
+    def test_permeability_matches_dense(self):
+        """Sparse and dense solvers must agree on k_lu within 1 %."""
+        k_dense = compute_permeability(self.result_dense, verbose=False)["k_lu"]
+        k_sparse = compute_permeability(self.result_sparse, verbose=False)["k_lu"]
+        assert k_sparse == pytest.approx(k_dense, rel=0.01)
+
+    def test_permeability_vs_analytical(self):
+        """Sparse k_lu must still match the bundle-of-tubes formula within 7 %."""
+        out = compute_permeability(self.result_sparse, verbose=False)
+        assert out["k_lu"] == pytest.approx(_k_analytical(), rel=0.07)
+
+    def test_velocity_field_shape(self):
+        """Sparse solver must return a velocity array of the correct shape."""
+        nx, ny, nz = self.result_sparse.solid.shape
+        assert self.result_sparse.velocity.shape == (nx, ny, nz, 3)
+
+    def test_solid_field_matches_dense(self):
+        """Solid mask must be identical between sparse and dense runs."""
+        np.testing.assert_array_equal(self.result_sparse.solid, self.result_dense.solid)
 
 
 # ---------------------------------------------------------------------------

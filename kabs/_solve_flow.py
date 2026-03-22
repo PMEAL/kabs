@@ -44,8 +44,8 @@ class FlowResult:
         self.nu = nu
         self._solver = solver
         self.solid = solver.solid.to_numpy()
-        self.rho = solver.rho.to_numpy()
-        self.velocity = solver.v.to_numpy()  # shape (nx, ny, nz, 3)
+        self.rho = solver.get_rho()
+        self.velocity = solver.get_velocity()  # shape (nx, ny, nz, 3)
 
     @classmethod
     def from_arrays(cls, solid, rho, velocity, direction=None, nu=None):
@@ -90,8 +90,6 @@ def solve_flow(
     n_steps=15000,
     nu=1.0 / 6.0,
     log_every=500,
-    export_vtk=True,
-    output_prefix="LB_SinglePhase",
     verbose=True,
     sparse=False,
     tol=1e-3,
@@ -112,11 +110,6 @@ def solve_flow(
         Kinematic viscosity in lattice units.  Default 1/6.
     log_every : int
         Print a progress line every this many steps.  Default 500.
-    export_vtk : bool
-        If True (default), write ``{output_prefix}-{final_step}-{direction}.vtr``
-        at the end.
-    output_prefix : str
-        Filename prefix for the VTR output.  Default ``'LB_SinglePhase'``.
     verbose : bool
         Print progress to stdout.  Default True.
     sparse : bool
@@ -201,11 +194,5 @@ def solve_flow(
             time_pre = time_now
 
     result = FlowResult(solver, direction, nu)
-
-    if export_vtk:
-        vtk_path = f"{output_prefix}-{final_step}-{direction}"
-        result.export_to_vtk(vtk_path)
-        if verbose:
-            print(f"Exported {vtk_path}.vtr")
 
     return result

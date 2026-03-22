@@ -489,41 +489,11 @@ class SinglePhaseSolver:
         for idx in ti.grouped(self.rho):
             ti.atomic_max(self.max_v[None], self.v[idx].norm())
 
-    def set_bc_vel_x1(self, vel):
-        self.bc_x_right = 2
-        self.vx_bcxr = vel[0]
-        self.vy_bcxr = vel[1]
-        self.vz_bcxr = vel[2]
-
-    def set_bc_vel_x0(self, vel):
-        self.bc_x_left = 2
-        self.vx_bcxl = vel[0]
-        self.vy_bcxl = vel[1]
-        self.vz_bcxl = vel[2]
-
-    def set_bc_vel_y1(self, vel):
-        self.bc_y_right = 2
-        self.vx_bcyr = vel[0]
-        self.vy_bcyr = vel[1]
-        self.vz_bcyr = vel[2]
-
-    def set_bc_vel_y0(self, vel):
-        self.bc_y_left = 2
-        self.vx_bcyl = vel[0]
-        self.vy_bcyl = vel[1]
-        self.vz_bcyl = vel[2]
-
-    def set_bc_vel_z1(self, vel):
-        self.bc_z_right = 2
-        self.vx_bczr = vel[0]
-        self.vy_bczr = vel[1]
-        self.vz_bczr = vel[2]
-
-    def set_bc_vel_z0(self, vel):
-        self.bc_z_left = 2
-        self.vx_bczl = vel[0]
-        self.vy_bczl = vel[1]
-        self.vz_bczl = vel[2]
+    def step(self):
+        self.collision()
+        self.streaming1()
+        self.boundary_condition()
+        self.streaming3()
 
     def set_bc_rho_x0(self, rho):
         self.bc_x_left = 1
@@ -549,34 +519,72 @@ class SinglePhaseSolver:
         self.bc_z_right = 1
         self.rho_bczr = rho
 
+    def get_rho(self):
+        """Return the density field as a numpy array trimmed to the domain shape."""
+        return self.rho.to_numpy()[: self.nx, : self.ny, : self.nz]
+
+    def get_velocity(self):
+        """Return the velocity field as a numpy array trimmed to the domain shape."""
+        return self.v.to_numpy()[: self.nx, : self.ny, : self.nz]
+
     def set_viscosity(self, niu):
         self.niu = niu
 
-    def set_force(self, force):
-        self.fx = force[0]
-        self.fy = force[1]
-        self.fz = force[2]
+    # def set_bc_vel_x1(self, vel):
+    #     self.bc_x_right = 2
+    #     self.vx_bcxr = vel[0]
+    #     self.vy_bcxr = vel[1]
+    #     self.vz_bcxr = vel[2]
 
-    def export_VTK(self, path):
-        v = self.v.to_numpy()
-        gridToVTK(
-            path,
-            self.x,
-            self.y,
-            self.z,
-            pointData={
-                "Solid": np.ascontiguousarray(self.solid.to_numpy()),
-                "rho": np.ascontiguousarray(self.rho.to_numpy()),
-                "velocity": (
-                    np.ascontiguousarray(v[..., 0]),
-                    np.ascontiguousarray(v[..., 1]),
-                    np.ascontiguousarray(v[..., 2]),
-                ),
-            },
-        )
+    # def set_bc_vel_x0(self, vel):
+    #     self.bc_x_left = 2
+    #     self.vx_bcxl = vel[0]
+    #     self.vy_bcxl = vel[1]
+    #     self.vz_bcxl = vel[2]
 
-    def step(self):
-        self.collision()
-        self.streaming1()
-        self.boundary_condition()
-        self.streaming3()
+    # def set_bc_vel_y1(self, vel):
+    #     self.bc_y_right = 2
+    #     self.vx_bcyr = vel[0]
+    #     self.vy_bcyr = vel[1]
+    #     self.vz_bcyr = vel[2]
+
+    # def set_bc_vel_y0(self, vel):
+    #     self.bc_y_left = 2
+    #     self.vx_bcyl = vel[0]
+    #     self.vy_bcyl = vel[1]
+    #     self.vz_bcyl = vel[2]
+
+    # def set_bc_vel_z1(self, vel):
+    #     self.bc_z_right = 2
+    #     self.vx_bczr = vel[0]
+    #     self.vy_bczr = vel[1]
+    #     self.vz_bczr = vel[2]
+
+    # def set_bc_vel_z0(self, vel):
+    #     self.bc_z_left = 2
+    #     self.vx_bczl = vel[0]
+    #     self.vy_bczl = vel[1]
+    #     self.vz_bczl = vel[2]
+
+    # def set_force(self, force):
+    #     self.fx = force[0]
+    #     self.fy = force[1]
+    #     self.fz = force[2]
+
+    # def export_VTK(self, path):
+    #     v = self.v.to_numpy()
+    #     gridToVTK(
+    #         path,
+    #         self.x,
+    #         self.y,
+    #         self.z,
+    #         pointData={
+    #             "Solid": np.ascontiguousarray(self.solid.to_numpy()),
+    #             "rho": np.ascontiguousarray(self.rho.to_numpy()),
+    #             "velocity": (
+    #                 np.ascontiguousarray(v[..., 0]),
+    #                 np.ascontiguousarray(v[..., 1]),
+    #                 np.ascontiguousarray(v[..., 2]),
+    #             ),
+    #         },
+    #     )

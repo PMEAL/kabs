@@ -101,7 +101,6 @@ _SOLVE_KW = dict(
     n_steps=4000,
     tol=1e-3,
     log_every=200,
-    export_vtk=False,
     verbose=False,
 )
 

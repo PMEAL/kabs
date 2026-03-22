@@ -3,7 +3,7 @@
 These tests verify that a FlowResult written to disk by write_flow_vtr can be
 read back by read_flow_vtr and that the resulting FlowResult's arrays are
 numerically identical to the originals.  No Taichi initialisation is required
-— the tests construct synthetic numpy arrays directly via FlowResult.from_arrays.
+as the tests construct synthetic numpy arrays directly via FlowResult.from_arrays.
 """
 
 import pathlib

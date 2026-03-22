@@ -26,6 +26,7 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "pytest>=8.0",
+    "pytest-cov>=7.1.0",
     "ruff>=0.15.6",
 ]
 
@@ -61,6 +62,13 @@ commit_args = ""
 [tool.bumpversion.parts.pre_l]
 values = ["dev"]
 optional_value = "dev"
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "@ti\\.kernel",
+    "@ti\\.func",
+]
 
 [[tool.bumpversion.files]]
 filename = "pyproject.toml"

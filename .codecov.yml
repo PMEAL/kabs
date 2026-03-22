@@ -1,5 +1,6 @@
 codecov:
   branch: dev
+  max_report_age: off
 
 coverage:
   precision: 1
@@ -12,6 +13,7 @@ coverage:
         target: auto
         threshold: 2%
         branches: null
+        carryforward: true
 
     patch:
       default:

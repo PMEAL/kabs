@@ -2,7 +2,7 @@ name: Bump Version
 
 on:
   push:
-    branches: [dev, release]
+    branches: [dev, main]
 
 jobs:
   bump:
@@ -34,11 +34,13 @@ jobs:
           git commit --amend --no-edit
           git push
 
-      - name: Bump version (release)
-        if: github.ref == 'refs/heads/release'
+      - name: Bump version (main)
+        if: github.ref == 'refs/heads/main'
         run: |
           if [[ "${{ github.event.head_commit.message }}" == *"#patch"* ]]; then
             uvx bump-my-version bump patch
+          elif [[ "${{ github.event.head_commit.message }}" == *"#feature"* ]]; then
+            uvx bump-my-version bump minor
           elif [[ "${{ github.event.head_commit.message }}" == *"#minor"* ]]; then
             uvx bump-my-version bump minor
           elif [[ "${{ github.event.head_commit.message }}" == *"#major"* ]]; then
@@ -50,9 +52,9 @@ jobs:
           git push --follow-tags
 
       - name: Merge release back into dev
-        if: github.ref == 'refs/heads/release'
+        if: github.ref == 'refs/heads/main'
         run: |
           git fetch origin dev
           git checkout dev
-          git merge --no-ff origin/release -m "maint: merge release into dev [skip bump]"
+          git merge --no-ff origin/release -m "maint: merge main into dev [skip bump]"
           git push origin dev

@@ -56,5 +56,5 @@ jobs:
         run: |
           git fetch origin dev
           git checkout dev
-          git merge --no-ff origin/release -m "maint: merge main into dev [skip bump]"
+          git merge --no-ff origin/main -m "maint: merge main into dev [skip bump]"
           git push origin dev

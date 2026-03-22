@@ -19,14 +19,13 @@ where:
     dx_m    = physical voxel size in metres
 """
 
-
 import numpy as np
 
 
 __all__ = ["compute_hydraulic_conductance"]
 
 
-_RHO_IN  = 1.00
+_RHO_IN = 1.00
 _RHO_OUT = 0.99
 
 
@@ -76,10 +75,11 @@ def compute_hydraulic_conductance(
         Q_m3s      – volumetric flow rate in m^3/s  (None if dx_m/mu_phys not given)
         dP_Pa      – total pressure drop in Pa       (None if dx_m/mu_phys not given)
         g_SI       – conductance in m^3/(Pa·s)       (None if dx_m/mu_phys not given)
+        summary    – human-readable result summary string (always populated)
     """
     _dir = direction if direction is not None else source.direction
-    _nu  = nu        if nu        is not None else source.nu
-    solid    = source.solid
+    _nu = nu if nu is not None else source.nu
+    solid = source.solid
     velocity = source.velocity
 
     _dir = _dir.lower()
@@ -94,53 +94,68 @@ def compute_hydraulic_conductance(
     vz = velocity[..., 2]
     nx, ny, nz = solid.shape
 
-    v_flow  = {"x": vx,      "y": vy,      "z": vz     }[_dir]
-    L_flow  = {"x": nx,      "y": ny,      "z": nz     }[_dir]
+    v_flow = {"x": vx, "y": vy, "z": vz}[_dir]
+    L_flow = {"x": nx, "y": ny, "z": nz}[_dir]
     A_cross = {"x": ny * nz, "y": nx * nz, "z": nx * ny}[_dir]
 
     u_darcy = float(np.mean(v_flow))
-    Q_lu    = u_darcy * A_cross
-    dP_lu   = (_RHO_IN - _RHO_OUT) * cs2
-    g_lu    = Q_lu / dP_lu
+    Q_lu = u_darcy * A_cross
+    dP_lu = (_RHO_IN - _RHO_OUT) * cs2
+    g_lu = Q_lu / dP_lu
 
     Q_m3s = dP_Pa = g_SI = None
     can_convert = (dx_m is not None) and (mu_phys is not None)
     if can_convert:
         g_SI = g_lu * _nu * dx_m**3 / mu_phys
 
-    if verbose:
-        n_pore   = int(pore_mask.sum())
-        porosity = n_pore / pore_mask.size
-        print(f"\nFlow direction           = {_dir}")
-        print(f"Conduit length           = {L_flow}  [lu]")
-        print(f"Cross-section area       = {A_cross}  [lu^2]")
-        print(f"Pore voxels              = {n_pore}  (porosity = {porosity:.4f})")
-        print(f"\nDarcy velocity  u_D      = {u_darcy:.6e}  [lu/ts]")
-        print(f"Volumetric flow Q        = {Q_lu:.6e}  [lu^3/ts]")
-        print(f"Pressure drop   dP       = {dP_lu:.6f}  [lu pressure]")
-        print(f"\nConductance     g        = {g_lu:.6e}  [lu^3/ts / lu_pressure]")
-        if can_convert:
-            print(f"\nWith dx = {dx_m:.4e} m  and  mu = {mu_phys:.4e} Pa·s:")
-            print(f"  g = {g_SI:.4e}  m^3/(Pa·s)")
-        elif dx_m is None:
-            print("\nTo get physical units: pass dx_m (voxel size in metres)"
-                  " and mu_phys (dynamic viscosity in Pa·s).")
-        else:
-            print("\nTo get physical units: also pass mu_phys (dynamic viscosity in Pa·s).")
+    n_pore = int(pore_mask.sum())
+    porosity = n_pore / pore_mask.size
+    ax_idx = {"x": 0, "y": 1, "z": 2}[_dir]
+    slices = np.array([np.sum(np.take(v_flow, i, axis=ax_idx)) for i in range(L_flow)])
+    lines = [
+        f"",
+        f"Flow direction           = {_dir}",
+        f"Conduit length           = {L_flow}  [lu]",
+        f"Cross-section area       = {A_cross}  [lu^2]",
+        f"Pore voxels              = {n_pore}  (porosity = {porosity:.4f})",
+        f"",
+        f"Darcy velocity  u_D      = {u_darcy:.6e}  [lu/ts]",
+        f"Volumetric flow Q        = {Q_lu:.6e}  [lu^3/ts]",
+        f"Pressure drop   dP       = {dP_lu:.6f}  [lu pressure]",
+        f"",
+        f"Conductance     g        = {g_lu:.6e}  [lu^3/ts / lu_pressure]",
+    ]
+    if can_convert:
+        lines += [
+            f"",
+            f"With dx = {dx_m:.4e} m  and  mu = {mu_phys:.4e} Pa·s:",
+            f"  g = {g_SI:.4e}  m^3/(Pa·s)",
+        ]
+    elif dx_m is None:
+        lines.append(
+            "To get physical units: pass dx_m (voxel size in metres) and mu_phys (dynamic viscosity in Pa·s)."
+        )
+    else:
+        lines.append(
+            "To get physical units: also pass mu_phys (dynamic viscosity in Pa·s)."
+        )
+    lines += [
+        f"",
+        f"--- Sanity check: per-slice Q (should be constant) ---",
+        f"  Q_slice min={slices.min():.4e}  max={slices.max():.4e}"
+        f"  mean={slices.mean():.4e}  std={slices.std():.4e}",
+    ]
+    summary = "\n".join(lines)
 
-        ax_idx = {"x": 0, "y": 1, "z": 2}[_dir]
-        slices = np.array([np.sum(np.take(v_flow, i, axis=ax_idx)) for i in range(L_flow)])
-        print(f"\n--- Sanity check: per-slice Q (should be constant) ---")
-        print(f"  Q_slice min={slices.min():.4e}  max={slices.max():.4e}"
-              f"  mean={slices.mean():.4e}  std={slices.std():.4e}")
+    if verbose:
+        print(summary)
 
     return {
-        "Q_lu":  Q_lu,
+        "Q_lu": Q_lu,
         "dP_lu": dP_lu,
-        "g_lu":  g_lu,
+        "g_lu": g_lu,
         "Q_m3s": Q_m3s,
         "dP_Pa": dP_Pa,
-        "g_SI":  g_SI,
+        "g_SI": g_SI,
+        "summary": summary,
     }
-
-

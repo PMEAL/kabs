@@ -1,7 +1,12 @@
 # %%
 import taichi as ti
 import numpy as np
-from kabs import solve_flow, compute_hydraulic_conductance, plot_cross_section, add_streamlines
+from kabs import (
+    solve_flow,
+    compute_hydraulic_conductance,
+    plot_cross_section,
+    add_streamlines,
+)
 from porespy.tools import get_edt
 import matplotlib.pyplot as plt
 
@@ -16,11 +21,11 @@ L_lu = 50
 W = 50
 H = 50
 box = np.zeros([L_lu, W, H], dtype=int)
-cy, cz = int(W/2), int(H/2)
+cy, cz = int(W / 2), int(H / 2)
 for i in range(L_lu):
     for j in range(W):
         for k in range(H):
-            if (j - cy)**2 + (k - cz)**2 < R_lu**2:
+            if (j - cy) ** 2 + (k - cz) ** 2 < R_lu**2:
                 box[i, j, k] = 1
 # Add spheres to the ends
 balls = np.ones_like(box, dtype=bool)
@@ -31,8 +36,7 @@ balls = edt(balls) < Rp
 
 soln = solve_flow(
     im=box,
-    direction="x",   # cylinder axis is numpy axis 0 = solver x
-    export_vtk=False,
+    direction="x",  # cylinder axis is numpy axis 0 = solver x
     tol=1e-4,
 )
 # soln.export_to_vtk("cylinder")
@@ -44,7 +48,7 @@ results = compute_hydraulic_conductance(
     mu_phys=0.001,
 )
 # %%
-g_LBM = results['g_SI']
+g_LBM = results["g_SI"]
 print(f"\ng_LBM  = {g_LBM:.4e} m³/(Pa·s)")
 
 # Analytical Hagen-Poiseuille check
@@ -56,15 +60,15 @@ g_HP = np.pi * R_exact**4 / (8 * mu * L_phys)
 print(f"g_HP) = {g_HP:.4e} m³/(Pa·s)")
 
 # %%
-view = plot_cross_section(soln, direction='x', axis=2)
+view = plot_cross_section(soln, direction="x", axis=2)
 fig, ax = plt.subplots()
-ax.pcolormesh(view/box[..., 30].T, color='k', linewidth=0.4)
-ax.axis('equal')
+ax.pcolormesh(view / box[..., 30].T, color="k", linewidth=0.4)
+ax.axis("equal")
 ax = add_streamlines(
-    soln, 
-    axis=2, 
-    ax=ax, 
-    color='white', 
+    soln,
+    axis=2,
+    ax=ax,
+    color="white",
     linewidth=0.5,
     density=1.5,
 )

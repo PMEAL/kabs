@@ -39,7 +39,7 @@ ti.init(arch=ti.cpu)  # use ti.gpu for GPU acceleration
 im = ps.generators.cylinders([200, 200, 200], r=10, porosity=0.7).astype(int)
 
 # Run the LBM simulation and get a FlowResult back
-result = solve_flow(im, direction="x", export_vtk=False)
+result = solve_flow(im, direction="x")
 
 # Optionally save to a VTR file for later inspection
 result.export_to_vtk("sample")
@@ -96,6 +96,13 @@ compute_permeability(result)
 The convergence check fires every `log_every` steps (default 500), so the true stopping
 point is rounded to that interval.
 
+To save the converged result to a VTR file, call `export_to_vtk` on the returned object:
+
+```python
+result = solve_flow(im, direction="x", tol=1e-4)
+result.export_to_vtk("sample")  # writes sample-<step>-x.vtr
+```
+
 ### Full permeability tensor
 
 For anisotropic materials, run all three directions:
@@ -103,7 +110,7 @@ For anisotropic materials, run all three directions:
 ```python
 results = {}
 for ax in ("x", "y", "z"):
-    result = solve_flow(im, direction=ax, export_vtk=False)
+    result = solve_flow(im, direction=ax)
     results[ax] = compute_permeability(result, dx_m=2.85e-6)
 
 print(f"Kx={results['x']['k_mD']:.2f}  Ky={results['y']['k_mD']:.2f}  Kz={results['z']['k_mD']:.2f}  mD")
@@ -127,7 +134,7 @@ For images with a high solid fraction, enable sparse storage so only pore voxels
 allocated in GPU memory:
 
 ```python
-solver = solve_flow(im, direction="x", sparse=True)
+result = solve_flow(im, direction="x", sparse=True)
 ```
 
 ## Return values (permeability)

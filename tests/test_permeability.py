@@ -117,6 +117,42 @@ class TestBundlePermeability:
 
 
 # ---------------------------------------------------------------------------
+# Sparse storage: results must match the dense solver
+# ---------------------------------------------------------------------------
+
+_SOLVE_KW_SPARSE = {**_SOLVE_KW, "sparse": True}
+
+
+class TestSparsePermeability:
+    """Sparse storage should produce the same physics as dense storage."""
+
+    @classmethod
+    def setup_class(cls):
+        cls.result_dense = solve_flow(_bundle_image(), **_SOLVE_KW)
+        cls.result_sparse = solve_flow(_bundle_image(), **_SOLVE_KW_SPARSE)
+
+    def test_permeability_matches_dense(self):
+        """Sparse and dense solvers must agree on k_lu within 1 %."""
+        k_dense = compute_permeability(self.result_dense, verbose=False)["k_lu"]
+        k_sparse = compute_permeability(self.result_sparse, verbose=False)["k_lu"]
+        assert k_sparse == pytest.approx(k_dense, rel=0.01)
+
+    def test_permeability_vs_analytical(self):
+        """Sparse k_lu must still match the bundle-of-tubes formula within 7 %."""
+        out = compute_permeability(self.result_sparse, verbose=False)
+        assert out["k_lu"] == pytest.approx(_k_analytical(), rel=0.07)
+
+    def test_velocity_field_shape(self):
+        """Sparse solver must return a velocity array of the correct shape."""
+        nx, ny, nz = self.result_sparse.solid.shape
+        assert self.result_sparse.velocity.shape == (nx, ny, nz, 3)
+
+    def test_solid_field_matches_dense(self):
+        """Solid mask must be identical between sparse and dense runs."""
+        np.testing.assert_array_equal(self.result_sparse.solid, self.result_dense.solid)
+
+
+# ---------------------------------------------------------------------------
 # Manual runner ("Run file in interactive window")
 # ---------------------------------------------------------------------------
 

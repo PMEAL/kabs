@@ -30,7 +30,7 @@ _RHO_OUT = 0.99
 
 
 def compute_hydraulic_conductance(
-    source,
+    soln,
     direction=None,
     nu=None,
     dx_m=None,
@@ -46,18 +46,14 @@ def compute_hydraulic_conductance(
 
     Parameters
     ----------
-    source : FlowResult or str/path-like
-        Either a ``FlowResult`` returned by ``solve_flow()``, or a path to a
-        ``.vtr`` file written by ``SinglePhaseSolver.export_VTK()``.
-        When a ``FlowResult`` is given, ``direction`` and ``nu`` default to the
-        values stored in the result.
+    soln : FlowResult
+        A ``FlowResult`` returned by ``solve_flow()``.  ``direction`` and
+        ``nu`` default to the values stored in the result.
     direction : {'x', 'y', 'z'} or None
-        Flow direction.  If *None* and ``source`` is a ``FlowResult``, taken
-        from ``source.direction``; otherwise defaults to ``'x'``.
+        Flow direction.  If *None*, taken from ``soln.direction``.
     nu : float or None
         Kinematic viscosity used in the LBM simulation (lattice units).
-        If *None* and ``source`` is a ``FlowResult``, taken from ``source.nu``;
-        otherwise defaults to 1/6.
+        If *None*, taken from ``soln.nu``.
     dx_m : float or None
         Physical voxel size in metres.  Required for physical-unit output.
     mu_phys : float or None
@@ -77,10 +73,10 @@ def compute_hydraulic_conductance(
         g_SI       – conductance in m^3/(Pa·s)       (None if dx_m/mu_phys not given)
         summary    – human-readable result summary string (always populated)
     """
-    _dir = direction if direction is not None else source.direction
-    _nu = nu if nu is not None else source.nu
-    solid = source.solid
-    velocity = source.velocity
+    _dir = direction if direction is not None else soln.direction
+    _nu = nu if nu is not None else soln.nu
+    solid = soln.solid
+    velocity = soln.velocity
 
     _dir = _dir.lower()
     if _dir not in ("x", "y", "z"):

@@ -106,7 +106,7 @@ def _compute_permeability_core(solid, velocity, direction, nu, dx_m, verbose):
 
 
 def compute_permeability(
-    source,
+    soln,
     direction=None,
     nu=None,
     dx_m=None,
@@ -116,14 +116,14 @@ def compute_permeability(
 
     Parameters
     ----------
-    source : FlowResult
+    soln : FlowResult
         A ``FlowResult`` returned by ``solve_flow()``.  ``direction`` and
         ``nu`` default to the values stored in the result.
     direction : {'x', 'y', 'z'} or None
-        Flow direction.  If *None*, taken from ``source.direction``.
+        Flow direction.  If *None*, taken from ``soln.direction``.
     nu : float or None
         Kinematic viscosity in lattice units.  If *None*, taken from
-        ``source.nu``.
+        ``soln.nu``.
     dx_m : float or None
         Physical voxel size in metres.  If given, results are also reported
         in m² and milliDarcy.  E.g. ``dx_m=2.85e-6`` for a 2.85-µm scan.
@@ -141,10 +141,10 @@ def compute_permeability(
         k_mD       – permeability in milliDarcy  (None if dx_m is None)
         summary    – human-readable result summary string (always populated)
     """
-    _dir = direction if direction is not None else source.direction
-    _nu = nu if nu is not None else source.nu
-    solid = source.solid
-    velocity = source.velocity
+    _dir = direction if direction is not None else soln.direction
+    _nu = nu if nu is not None else soln.nu
+    solid = soln.solid
+    velocity = soln.velocity
 
     _dir = _dir.lower()
     if _dir not in ("x", "y", "z"):

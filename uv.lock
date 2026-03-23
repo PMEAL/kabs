@@ -850,7 +850,7 @@ requires-dist = [
     { name = "ipywidgets", specifier = ">=8.1.8" },
     { name = "meshio", specifier = ">=5.3.5" },
     { name = "nest-asyncio2", specifier = ">=1.7.2" },
-    { name = "numpy", specifier = ">=2.4.2" },
+    { name = "numpy", specifier = ">=2" },
     { name = "pyevtk", specifier = ">=1.6.0" },
     { name = "pyvista", specifier = ">=0.47.1" },
     { name = "taichi", specifier = ">=1.7.4" },

@@ -90,10 +90,82 @@ def check_flow_development(
 ):
     """Check whether lead regions appear sufficiently developed.
 
+    This helper evaluates whether the padded inlet/outlet lead regions behave
+    like developed flow zones. It combines profile-shape indicators
+    (alpha-matching and alpha-plateau checks), pressure-linearity checks, and
+    per-slice flow-rate stability checks into a single pass/fail summary while
+    also returning all intermediate diagnostics.
+
     Returns
     -------
     dict
-        Contains ``ok``, ``checks``, ``reasons``, and detailed diagnostics.
+        Development-check summary and diagnostics.
+
+        +----------------------+-----------------------------------------------+
+        | Key                  | Description                                   |
+        +======================+===============================================+
+        | ``ok``               | Overall boolean pass/fail. ``True`` only      |
+        |                      | when every check in ``checks`` passes.        |
+        +----------------------+-----------------------------------------------+
+        | ``reasons``          | List of check names that failed. Empty list   |
+        |                      | means all checks passed.                      |
+        +----------------------+-----------------------------------------------+
+        | ``checks``           | Mapping from check name to boolean result.    |
+        |                      | Useful for programmatic gating and tests.     |
+        +----------------------+-----------------------------------------------+
+        | ``alpha_slice``      | Per-slice alpha values along the flow axis.   |
+        |                      | ``NaN`` where a slice is invalid/undefined.   |
+        +----------------------+-----------------------------------------------+
+        | ``alpha_in``         | Mean alpha in near-conduit inlet window.      |
+        +----------------------+-----------------------------------------------+
+        | ``alpha_out``        | Mean alpha in near-conduit outlet window.     |
+        +----------------------+-----------------------------------------------+
+        | ``alpha_in_mid``     | Mean alpha in middle of inlet lead            |
+        |                      | (plateau reference).                          |
+        +----------------------+-----------------------------------------------+
+        | ``alpha_out_mid``    | Mean alpha in middle of outlet lead           |
+        |                      | (plateau reference).                          |
+        +----------------------+-----------------------------------------------+
+        | ``alpha_match_tol``  | Tolerance for inlet/outlet alpha agreement,   |
+        |                      | i.e. ``|alpha_in - alpha_out|``.              |
+        +----------------------+-----------------------------------------------+
+        | ``alpha_plateau_tol``| Tolerance for near-lead vs mid-lead alpha     |
+        |                      | consistency checks.                           |
+        +----------------------+-----------------------------------------------+
+        | ``coef_in``          | Inlet pressure-fit coefficients               |
+        |                      | ``[slope, intercept]`` or ``None``.           |
+        +----------------------+-----------------------------------------------+
+        | ``coef_out``         | Outlet pressure-fit coefficients              |
+        |                      | ``[slope, intercept]`` or ``None``.           |
+        +----------------------+-----------------------------------------------+
+        | ``r2_in``            | Inlet lead pressure-fit $R^2$ value.          |
+        +----------------------+-----------------------------------------------+
+        | ``r2_out``           | Outlet lead pressure-fit $R^2$ value.         |
+        +----------------------+-----------------------------------------------+
+        | ``pressure_r2_min``  | Minimum required $R^2$ threshold for          |
+        |                      | pressure-linearity checks.                    |
+        +----------------------+-----------------------------------------------+
+        | ``q_cv_in``          | Inlet lead flow-rate coefficient of           |
+        |                      | variation, $\sigma_Q / |\bar{Q}|$.            |
+        +----------------------+-----------------------------------------------+
+        | ``q_cv_out``         | Outlet lead flow-rate coefficient of          |
+        |                      | variation, $\sigma_Q / |\bar{Q}|$.            |
+        +----------------------+-----------------------------------------------+
+        | ``q_cv_max``         | Maximum allowed flow-rate coefficient of      |
+        |                      | variation threshold.                          |
+        +----------------------+-----------------------------------------------+
+        | ``in_eval``          | Slice indices used for near-conduit inlet     |
+        |                      | alpha evaluation.                             |
+        +----------------------+-----------------------------------------------+
+        | ``out_eval``         | Slice indices used for near-conduit outlet    |
+        |                      | alpha evaluation.                             |
+        +----------------------+-----------------------------------------------+
+        | ``in_mid``           | Slice indices used for inlet mid-lead         |
+        |                      | plateau alpha reference.                      |
+        +----------------------+-----------------------------------------------+
+        | ``out_mid``          | Slice indices used for outlet mid-lead        |
+        |                      | plateau alpha reference.                      |
+        +----------------------+-----------------------------------------------+
     """
     n_slices = p_slice.size
     alpha_slice = np.full(n_slices, np.nan, dtype=float)
@@ -267,14 +339,40 @@ def compute_hydraulic_conductance(
 
     Returns
     -------
-    dict with keys:
-        Q_lu       – volumetric flow rate in lattice units (lu^3/ts)
-        dP_lu      – total pressure drop in lattice units
-        g_lu       – conductance in lattice units (lu^3/ts / lu_pressure)
-        Q_m3s      – volumetric flow rate in m^3/s  (None if dx_m/mu_phys not given)
-        dP_Pa      – total pressure drop in Pa       (None if dx_m/mu_phys not given)
-        g_SI       – conductance in m^3/(Pa·s)       (None if dx_m/mu_phys not given)
-        summary    – human-readable result summary string (always populated)
+    dict
+        Conductance values from a completed flow solution, including optional
+        conversion to SI units when ``dx_m`` and ``mu_phys`` are provided.
+
+        +-----------+----------------------------------------------------------+
+        | Key       | Description                                              |
+        +===========+==========================================================+
+        | ``Q_lu``  | Volumetric flow rate in lattice units                    |
+        |           | ($\mathrm{lu^3/ts}$), computed as Darcy velocity         |
+        |           | times cross-sectional voxel area.                        |
+        +-----------+----------------------------------------------------------+
+        | ``dP_lu`` | Applied pressure drop in lattice pressure units,         |
+        |           | computed from fixed boundary densities and               |
+        |           | $c_s^2 = 1/3$.                                           |
+        +-----------+----------------------------------------------------------+
+        | ``g_lu``  | Hydraulic conductance in lattice units,                  |
+        |           | $g = Q/\Delta P$.                                        |
+        +-----------+----------------------------------------------------------+
+        | ``Q_m3s`` | Volumetric flow rate in SI units                         |
+        |           | ($\mathrm{m^3/s}$). Currently ``None`` in this           |
+        |           | function because only conductance conversion             |
+        |           | is performed.                                            |
+        +-----------+----------------------------------------------------------+
+        | ``dP_Pa`` | Pressure drop in SI units (Pa). Currently ``None``       |
+        |           | in this function because only conductance conversion     |
+        |           | is performed.                                            |
+        +-----------+----------------------------------------------------------+
+        | ``g_SI``  | Hydraulic conductance in SI units                        |
+        |           | ($\mathrm{m^3/(Pa\cdot s)}$), or ``None`` if             |
+        |           | ``dx_m``/``mu_phys`` were not supplied.                  |
+        +-----------+----------------------------------------------------------+
+        | ``summary``| Multi-line human-readable summary of geometry, flow,    |
+        |           | and sanity-check statistics.                             |
+        +-----------+----------------------------------------------------------+
     """
     _dir = direction if direction is not None else soln.direction
     _nu = nu if nu is not None else soln.nu
@@ -414,14 +512,102 @@ def solve_hydraulic_conductance(
     Returns
     -------
     dict
-        Dictionary containing:
-        - flow_result
-        - padded_image
-        - dP/Q-based conductance (LU and SI)
-        - model-based conductance (viscous + acceleration, LU and SI)
-        - diagnostic arrays and fit info
-        - development diagnostics and pass/fail flag
-        - report_text (formatted summary for inspection)
+        Full solution bundle containing the solver output, conductance values,
+        pressure/flow diagnostics, and development-quality checks.
+
+        +------------------+-----------------------------------------------+
+        | Key              | Description                                   |
+        +==================+===============================================+
+        | ``flow_result``  | ``FlowResult`` returned by ``solve_flow``     |
+        |                  | for the padded domain.                        |
+        +------------------+-----------------------------------------------+
+        | ``padded_image`` | Binary image after adding inlet/outlet lead   |
+        |                  | padding in selected flow direction.           |
+        +------------------+-----------------------------------------------+
+        | ``direction``    | Flow direction used for solve and post-       |
+        |                  | processing (``"x"``, ``"y"``, or ``"z"``).   |
+        +------------------+-----------------------------------------------+
+        | ``pad``          | Number of voxels padded on each side along    |
+        |                  | the flow axis.                                |
+        +------------------+-----------------------------------------------+
+        | ``j_start``      | First slice index of extracted conduit        |
+        |                  | region (after inlet lead).                    |
+        +------------------+-----------------------------------------------+
+        | ``j_end``        | Last slice index of extracted conduit         |
+        |                  | region (before outlet lead).                  |
+        +------------------+-----------------------------------------------+
+        | ``conduit_idx``  | Slice indices spanning conduit region used    |
+        |                  | for conductance evaluation.                   |
+        +------------------+-----------------------------------------------+
+        | ``fit_in``       | Slice indices used for inlet lead pressure    |
+        |                  | fitting.                                      |
+        +------------------+-----------------------------------------------+
+        | ``fit_out``      | Slice indices used for outlet lead pressure   |
+        |                  | fitting.                                      |
+        +------------------+-----------------------------------------------+
+        | ``coef_in``      | Inlet pressure-fit coefficients               |
+        |                  | ``[slope, intercept]`` or ``None``.           |
+        +------------------+-----------------------------------------------+
+        | ``coef_out``     | Outlet pressure-fit coefficients              |
+        |                  | ``[slope, intercept]`` or ``None``.           |
+        +------------------+-----------------------------------------------+
+        | ``dP_fit_lu``    | Pressure drop from inlet/outlet linear fits   |
+        |                  | at conduit boundaries (lattice units).        |
+        +------------------+-----------------------------------------------+
+        | ``dP_edge_lu``   | Pressure drop from edge-window averaging      |
+        |                  | near conduit ends (lattice units).            |
+        +------------------+-----------------------------------------------+
+        | ``Q_lu``         | Mean volumetric flow rate over conduit        |
+        |                  | slices (lattice units).                       |
+        +------------------+-----------------------------------------------+
+        | ``R_lbm_lu``     | Resistance from direct simulation             |
+        |                  | observables, $R = \Delta P_{edge}/Q$.         |
+        +------------------+-----------------------------------------------+
+        | ``g_lbm_lu``     | Conductance from direct simulation            |
+        |                  | observables, $g = 1/R_{lbm}$.                 |
+        +------------------+-----------------------------------------------+
+        | ``R_visc_lu``    | Viscous resistance contribution from          |
+        |                  | numerical area-based integration.             |
+        +------------------+-----------------------------------------------+
+        | ``R_acc_lu``     | Acceleration/inertial resistance from         |
+        |                  | inlet/outlet area and alpha terms.            |
+        +------------------+-----------------------------------------------+
+        | ``R_total_lu``   | Total model resistance,                       |
+        |                  | $R_{visc} + R_{acc}$.                         |
+        +------------------+-----------------------------------------------+
+        | ``g_model_lu``   | Model-derived conductance,                    |
+        |                  | $g = 1/R_{total}$.                            |
+        +------------------+-----------------------------------------------+
+        | ``g_lbm_si``     | Direct-observable conductance converted       |
+        |                  | to SI units ($\mathrm{m^3/(Pa\cdot s)}$).     |
+        +------------------+-----------------------------------------------+
+        | ``g_model_si``   | Model-derived conductance converted           |
+        |                  | to SI units ($\mathrm{m^3/(Pa\cdot s)}$).     |
+        +------------------+-----------------------------------------------+
+        | ``rho_lu``       | Mean fluid density over pore voxels           |
+        |                  | (lattice units).                              |
+        +------------------+-----------------------------------------------+
+        | ``mu_lu``        | Effective dynamic viscosity in lattice        |
+        |                  | units, ``rho_lu * nu``.                       |
+        +------------------+-----------------------------------------------+
+        | ``areas``        | Per-slice pore area counts normal to flow     |
+        |                  | direction (voxel-count units).                |
+        +------------------+-----------------------------------------------+
+        | ``p_slice``      | Per-slice mean pressure values over pore      |
+        |                  | voxels (lattice units).                       |
+        +------------------+-----------------------------------------------+
+        | ``q_slice``      | Per-slice volumetric flow values over pore    |
+        |                  | voxels (lattice units).                       |
+        +------------------+-----------------------------------------------+
+        | ``development``  | Output dict from ``check_flow_development``   |
+        |                  | with detailed pass/fail diagnostics.          |
+        +------------------+-----------------------------------------------+
+        | ``development_ok``| Convenience boolean equal to                 |
+        |                  | ``development['ok']``.                        |
+        +------------------+-----------------------------------------------+
+        | ``report_text``  | Preformatted multi-line summary from          |
+        |                  | ``format_hydraulic_conductance_report``.      |
+        +------------------+-----------------------------------------------+
     """
     axis_map = {"x": 0, "y": 1, "z": 2}
     if direction not in axis_map:

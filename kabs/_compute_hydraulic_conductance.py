@@ -1,31 +1,9 @@
-"""
-Compute hydraulic and diffusive conductance from LBM simulation output.
-
-Each function accepts either a result object (``FlowResult`` / ``DiffusionResult``)
-returned by ``solve_flow`` / ``solve_diffusion``, or a path to a .vtr file.
-
-Hydraulic conductance (single-phase flow):
-
-    $$Q = g_h * dP$$
-
-where Q is the volumetric flow rate and dP = P_in - P_out is the total pressure
-drop across the conduit.  For a circular cylinder this reduces to the
-Hagen-Poiseuille result:  $g_h = pi * R^4 / (8 * mu * L)$.
-
-Unit conversion (lattice → physical):
-    g_h_phys [m^3/(Pa·s)]  =  g_h_lu  *  nu_lu  *  dx_m^3  /  mu_phys
-
-where:
-    dx_m    = physical voxel size in metres
-"""
-
 import numpy as np
 
 from ._solve_flow import solve_flow
 
 
 __all__ = [
-    "compute_hydraulic_conductance",
     "check_flow_development",
     "format_hydraulic_conductance_report",
     "solve_hydraulic_conductance",
@@ -71,6 +49,38 @@ def _alpha_for_slice(fluid, u_axis, axis, j):
     if np.isclose(ubar, 0.0):
         return np.nan
     return float(np.mean(uu**3) / (ubar**3))
+
+
+def _slice_polar_moment_and_istar(fluid, axis, valid_idx):
+    """Compute per-slice polar moment ``I`` and normalized ``I* = I / A^2``.
+
+    Notes
+    -----
+    The polar moment is computed from pore-voxel centers relative to the
+    pore-area centroid in each flow-normal slice.
+    """
+    n_slices = fluid.shape[axis]
+    i_slice = np.full(n_slices, np.nan, dtype=float)
+    istar_slice = np.full(n_slices, np.nan, dtype=float)
+
+    for j in valid_idx:
+        sl = [slice(None), slice(None), slice(None)]
+        sl[axis] = int(j)
+        mask = fluid[tuple(sl)]
+
+        area = int(np.count_nonzero(mask))
+        if area <= 0:
+            continue
+
+        coords = np.argwhere(mask).astype(float)
+        centroid = np.mean(coords, axis=0)
+        r2 = np.sum((coords - centroid) ** 2, axis=1)
+        i_val = float(np.sum(r2))
+
+        i_slice[j] = i_val
+        istar_slice[j] = i_val / float(area**2)
+
+    return i_slice, istar_slice
 
 
 def check_flow_development(
@@ -279,6 +289,8 @@ def format_hydraulic_conductance_report(result):
         f"dP_edge_lu                = {result.get('dP_edge_lu', np.nan):.6e}",
         f"g_lbm_lu                  = {result.get('g_lbm_lu', np.nan):.6e}",
         f"g_model_lu                = {result.get('g_model_lu', np.nan):.6e}",
+        f"istar mode                = {result.get('istar_source', 'user')}",
+        f"istar mean                = {result.get('istar_mean', np.nan):.6e}",
         f"g_lbm_si                  = {result.get('g_lbm_si', np.nan):.6e}",
         f"g_model_si                = {result.get('g_model_si', np.nan):.6e}",
         "",
@@ -304,160 +316,6 @@ def format_hydraulic_conductance_report(result):
     return "\n".join(lines)
 
 
-def compute_hydraulic_conductance(
-    soln,
-    direction=None,
-    nu=None,
-    dx_m=None,
-    mu_phys=None,
-    verbose=True,
-):
-    """Compute hydraulic conductance g from a single-phase LBM simulation.
-
-    The conductance is defined by  $Q = g * (P_in - P_out)$,  where $Q$ is the
-    volumetric flow rate through the conduit.  For a circular cylinder of
-    radius $R$ and length $L$ this equals the Hagen-Poiseuille value
-    $g = pi * R^4 / (8 * mu * L)$.
-
-    Parameters
-    ----------
-    soln : FlowResult
-        A ``FlowResult`` returned by ``solve_flow()``.  ``direction`` and
-        ``nu`` default to the values stored in the result.
-    direction : {'x', 'y', 'z'} or None
-        Flow direction.  If *None*, taken from ``soln.direction``.
-    nu : float or None
-        Kinematic viscosity used in the LBM simulation (lattice units).
-        If *None*, taken from ``soln.nu``.
-    dx_m : float or None
-        Physical voxel size in metres.  Required for physical-unit output.
-    mu_phys : float or None
-        Dynamic viscosity of the fluid in Pa·s (e.g. water at 20 °C ≈ 1e-3).
-        Required for physical-unit output.  Ignored if ``dx_m`` is None.
-    verbose : bool
-        Print a summary of results to stdout.  Default True.
-
-    Returns
-    -------
-    dict
-        Conductance values from a completed flow solution, including optional
-        conversion to SI units when ``dx_m`` and ``mu_phys`` are provided.
-
-        +-----------+----------------------------------------------------------+
-        | Key       | Description                                              |
-        +===========+==========================================================+
-        | ``Q_lu``  | Volumetric flow rate in lattice units                    |
-        |           | ($\mathrm{lu^3/ts}$), computed as Darcy velocity         |
-        |           | times cross-sectional voxel area.                        |
-        +-----------+----------------------------------------------------------+
-        | ``dP_lu`` | Applied pressure drop in lattice pressure units,         |
-        |           | computed from fixed boundary densities and               |
-        |           | $c_s^2 = 1/3$.                                           |
-        +-----------+----------------------------------------------------------+
-        | ``g_lu``  | Hydraulic conductance in lattice units,                  |
-        |           | $g = Q/\Delta P$.                                        |
-        +-----------+----------------------------------------------------------+
-        | ``Q_m3s`` | Volumetric flow rate in SI units                         |
-        |           | ($\mathrm{m^3/s}$). Currently ``None`` in this           |
-        |           | function because only conductance conversion             |
-        |           | is performed.                                            |
-        +-----------+----------------------------------------------------------+
-        | ``dP_Pa`` | Pressure drop in SI units (Pa). Currently ``None``       |
-        |           | in this function because only conductance conversion     |
-        |           | is performed.                                            |
-        +-----------+----------------------------------------------------------+
-        | ``g_SI``  | Hydraulic conductance in SI units                        |
-        |           | ($\mathrm{m^3/(Pa\cdot s)}$), or ``None`` if             |
-        |           | ``dx_m``/``mu_phys`` were not supplied.                  |
-        +-----------+----------------------------------------------------------+
-        | ``summary``| Multi-line human-readable summary of geometry, flow,    |
-        |           | and sanity-check statistics.                             |
-        +-----------+----------------------------------------------------------+
-    """
-    _dir = direction if direction is not None else soln.direction
-    _nu = nu if nu is not None else soln.nu
-    solid = soln.solid
-    velocity = soln.velocity
-
-    _dir = _dir.lower()
-    if _dir not in ("x", "y", "z"):
-        raise ValueError(f"direction must be 'x', 'y', or 'z', got {_dir!r}")
-
-    cs2 = 1.0 / 3.0  # D3Q19 speed-of-sound squared
-
-    pore_mask = solid == 0
-    vx = velocity[..., 0]
-    vy = velocity[..., 1]
-    vz = velocity[..., 2]
-    nx, ny, nz = solid.shape
-
-    v_flow = {"x": vx, "y": vy, "z": vz}[_dir]
-    L_flow = {"x": nx, "y": ny, "z": nz}[_dir]
-    A_cross = {"x": ny * nz, "y": nx * nz, "z": nx * ny}[_dir]
-
-    u_darcy = float(np.mean(v_flow))
-    Q_lu = u_darcy * A_cross
-    dP_lu = (_RHO_IN - _RHO_OUT) * cs2
-    g_lu = Q_lu / dP_lu
-
-    Q_m3s = dP_Pa = g_SI = None
-    can_convert = (dx_m is not None) and (mu_phys is not None)
-    if can_convert:
-        g_SI = g_lu * _nu * dx_m**3 / mu_phys
-
-    n_pore = int(pore_mask.sum())
-    porosity = n_pore / pore_mask.size
-    ax_idx = {"x": 0, "y": 1, "z": 2}[_dir]
-    slices = np.array([np.sum(np.take(v_flow, i, axis=ax_idx)) for i in range(L_flow)])
-    lines = [
-        "",
-        f"Flow direction           = {_dir}",
-        f"Conduit length           = {L_flow}  [lu]",
-        f"Cross-section area       = {A_cross}  [lu^2]",
-        f"Pore voxels              = {n_pore}  (porosity = {porosity:.4f})",
-        "",
-        f"Darcy velocity  u_D      = {u_darcy:.6e}  [lu/ts]",
-        f"Volumetric flow Q        = {Q_lu:.6e}  [lu^3/ts]",
-        f"Pressure drop   dP       = {dP_lu:.6f}  [lu pressure]",
-        "",
-        f"Conductance     g        = {g_lu:.6e}  [lu^3/ts / lu_pressure]",
-    ]
-    if can_convert:
-        lines += [
-            "",
-            f"With dx = {dx_m:.4e} m  and  mu = {mu_phys:.4e} Pa·s:",
-            f"  g = {g_SI:.4e}  m^3/(Pa·s)",
-        ]
-    elif dx_m is None:
-        lines.append(
-            "To get physical units: pass dx_m (voxel size in metres) and mu_phys (dynamic viscosity in Pa·s)."
-        )
-    else:
-        lines.append(
-            "To get physical units: also pass mu_phys (dynamic viscosity in Pa·s)."
-        )
-    lines += [
-        "",
-        "--- Sanity check: per-slice Q (should be constant) ---",
-        f"  Q_slice min={slices.min():.4e}  max={slices.max():.4e}"
-        f"  mean={slices.mean():.4e}  std={slices.std():.4e}",
-    ]
-    summary = "\n".join(lines)
-
-    if verbose:
-        print(summary)
-
-    return {
-        "Q_lu": Q_lu,
-        "dP_lu": dP_lu,
-        "g_lu": g_lu,
-        "Q_m3s": Q_m3s,
-        "dP_Pa": dP_Pa,
-        "g_SI": g_SI,
-        "summary": summary,
-    }
-
-
 def solve_hydraulic_conductance(
     im,
     pad=50,
@@ -466,7 +324,7 @@ def solve_hydraulic_conductance(
     n_steps=20_000,
     tol=1e-3,
     mu=1e-3,
-    Istar=1.0 / (2.0 * np.pi),
+    Istar=1 / (2 * np.pi),
     alpha_1=2.0,
     alpha_2=2.0,
     log_every=500,
@@ -494,8 +352,14 @@ def solve_hydraulic_conductance(
         Passed to solve_flow.
     mu : float, default=1e-3
         Dynamic viscosity [Pa.s] used for LU->SI conductance conversion.
-    Istar : float, default=1/(2*pi)
-        Shape factor for viscous resistance model.
+    Istar : float or {None, "auto"}, default=1/(2*pi)
+        Specific polar moment of inertia corresponding to the cross-sectional shape
+        of the conduit.
+
+        - If ``float``, the provided value is used directly.
+        - If ``None`` or ``"auto"``, a voxel-based per-slice polar moment is
+          computed from the pore cross-sections and converted to
+          ``Istar = I / A^2``.
     alpha_1, alpha_2 : float, default=2.0
         Kinetic-energy correction factors for inlet/outlet acceleration term.
     log_every : int, default=500
@@ -593,6 +457,17 @@ def solve_hydraulic_conductance(
         | ``areas``        | Per-slice pore area counts normal to flow     |
         |                  | direction (voxel-count units).                |
         +------------------+-----------------------------------------------+
+        | ``I_slice``      | Per-slice voxel-based polar moment of pore    |
+        |                  | area about slice centroid (voxel units).      |
+        +------------------+-----------------------------------------------+
+        | ``Istar_slice``  | Per-slice normalized polar moment             |
+        |                  | ``I / A^2`` (dimensionless).                  |
+        +------------------+-----------------------------------------------+
+        | ``istar_source`` | ``"user"`` when ``Istar`` is supplied,        |
+        |                  | ``"image"`` when computed from voxels.        |
+        +------------------+-----------------------------------------------+
+        | ``istar_mean``   | Mean ``Istar`` over conduit slices.           |
+        +------------------+-----------------------------------------------+
         | ``p_slice``      | Per-slice mean pressure values over pore      |
         |                  | voxels (lattice units).                       |
         +------------------+-----------------------------------------------+
@@ -689,10 +564,35 @@ def solve_hydraulic_conductance(
     A1 = float(A_conduit[0])
     A2 = float(A_conduit[-1])
 
+    i_slice, istar_slice = _slice_polar_moment_and_istar(fluid, axis, valid_idx)
+    auto_istar = Istar is None or (
+        isinstance(Istar, str) and Istar.strip().lower() == "auto"
+    )
+
+    if auto_istar:
+        istar_source = "image"
+        istar_conduit = istar_slice[conduit_idx]
+        if not np.all(np.isfinite(istar_conduit)):
+            raise RuntimeError("Failed to compute valid Istar values in conduit slices.")
+    else:
+        istar_source = "user"
+        try:
+            istar_value = float(Istar)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Istar must be float, None, or 'auto'.") from exc
+        if not np.isfinite(istar_value) or istar_value <= 0.0:
+            raise ValueError("Istar must be a finite positive value.")
+        istar_conduit = np.full(conduit_idx.shape[0], istar_value, dtype=float)
+
+    istar_mean = float(np.mean(istar_conduit))
+
     rho_lu = float(np.mean(soln.rho[fluid]))
     mu_lu = rho_lu * float(soln.nu)
 
-    R_visc_lu = 16.0 * np.pi**2 * mu_lu * np.sum(Istar / (A_conduit**2))
+    if auto_istar:
+        R_visc_lu = 16.0 * np.pi**2 * mu_lu * float(np.sum(istar_conduit))
+    else:
+        R_visc_lu = 16.0 * np.pi**2 * mu_lu * float(np.sum(istar_conduit / (A_conduit**2)))
     R_acc_lu = 0.5 * rho_lu * Q_lu * ((alpha_2 / A2**2) - (alpha_1 / A1**2))
     R_total_lu = R_visc_lu + R_acc_lu
     g_model_lu = 1.0 / R_total_lu
@@ -743,6 +643,10 @@ def solve_hydraulic_conductance(
         "rho_lu": rho_lu,
         "mu_lu": mu_lu,
         "areas": areas,
+        "I_slice": i_slice,
+        "Istar_slice": istar_slice,
+        "istar_source": istar_source,
+        "istar_mean": istar_mean,
         "p_slice": p_slice,
         "q_slice": q_slice,
         "development": development,

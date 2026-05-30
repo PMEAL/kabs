@@ -291,8 +291,18 @@ def format_hydraulic_conductance_report(result):
         f"g_model_lu                = {result.get('g_model_lu', np.nan):.6e}",
         f"istar mode                = {result.get('istar_source', 'user')}",
         f"istar mean                = {result.get('istar_mean', np.nan):.6e}",
+        f"rho_lu                    = {result.get('rho_lu', np.nan):.6e}",
+        f"mu_lu                     = {result.get('mu_lu', np.nan):.6e}",
+        f"rho_si                    = {result.get('rho_si', np.nan):.6e}",
+        f"mu_si                     = {result.get('mu_si', np.nan):.6e}",
+        f"nu_si                     = {result.get('nu_si', np.nan):.6e}",
         f"g_lbm_si                  = {result.get('g_lbm_si', np.nan):.6e}",
         f"g_model_si                = {result.get('g_model_si', np.nan):.6e}",
+        "",
+        "Resistance components (SI)",
+        f"  R_visc_si               = {result.get('R_visc_si', np.nan):.6e}",
+        f"  R_acc_si                = {result.get('R_acc_si', np.nan):.6e}",
+        f"  R_total_si              = {result.get('R_total_si', np.nan):.6e}",
         "",
         "Development diagnostics",
         f"  overall ok              = {d.get('ok', False)}",
@@ -324,7 +334,8 @@ def solve_hydraulic_conductance(
     n_steps=20_000,
     tol=1e-3,
     mu=1e-3,
-    Istar=1 / (2 * np.pi),
+    rho=997,
+    Istar=None,
     alpha_1=2.0,
     alpha_2=2.0,
     log_every=500,
@@ -352,7 +363,14 @@ def solve_hydraulic_conductance(
         Passed to solve_flow.
     mu : float, default=1e-3
         Dynamic viscosity [Pa.s] used for LU->SI conductance conversion.
-    Istar : float or {None, "auto"}, default=1/(2*pi)
+    rho_si : float or None, default=None
+        Fluid density in SI units [kg/m^3]. If provided, the output also includes
+        ``nu_si = mu / rho_si``.
+
+        Notes:
+        - This argument is used for SI property reporting only.
+        - It does not alter the LBM density field solved internally.
+    Istar : float or {None, "auto"}, default=None
         Specific polar moment of inertia corresponding to the cross-sectional shape
         of the conduit.
 
@@ -448,6 +466,25 @@ def solve_hydraulic_conductance(
         | ``g_model_si``   | Model-derived conductance converted           |
         |                  | to SI units ($\mathrm{m^3/(Pa\cdot s)}$).     |
         +------------------+-----------------------------------------------+
+        | ``R_visc_si``    | Viscous resistance contribution in SI units   |
+        |                  | ($\mathrm{Pa\cdot s/m^3}$).                   |
+        +------------------+-----------------------------------------------+
+        | ``R_acc_si``     | Acceleration/inertial resistance in SI units  |
+        |                  | ($\mathrm{Pa\cdot s/m^3}$).                   |
+        +------------------+-----------------------------------------------+
+        | ``R_total_si``   | Total model resistance in SI units             |
+        |                  | ($\mathrm{Pa\cdot s/m^3}$).                   |
+        +------------------+-----------------------------------------------+
+        | ``rho_si``       | Input fluid density in SI units               |
+        |                  | ($\mathrm{kg/m^3}$), or ``NaN`` if omitted.    |
+        +------------------+-----------------------------------------------+
+        | ``mu_si``        | Input dynamic viscosity in SI units           |
+        |                  | ($\mathrm{Pa\cdot s}$).                       |
+        +------------------+-----------------------------------------------+
+        | ``nu_si``        | Kinematic viscosity in SI units               |
+        |                  | ($\mathrm{m^2/s}$), ``mu_si / rho_si`` when    |
+        |                  | ``rho_si`` is supplied.                       |
+        +------------------+-----------------------------------------------+
         | ``rho_lu``       | Mean fluid density over pore voxels           |
         |                  | (lattice units).                              |
         +------------------+-----------------------------------------------+
@@ -489,6 +526,23 @@ def solve_hydraulic_conductance(
         raise ValueError("direction must be one of {'x', 'y', 'z'}")
     if pad < 0:
         raise ValueError("pad must be >= 0")
+    try:
+        mu = float(mu)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("mu must be a finite positive float.") from exc
+    if not np.isfinite(mu) or mu <= 0.0:
+        raise ValueError("mu must be a finite positive float.")
+    if rho is None:
+        rho_si_out = np.nan
+        nu_si = np.nan
+    else:
+        try:
+            rho_si_out = float(rho)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("rho_si must be a finite positive float or None.") from exc
+        if not np.isfinite(rho_si_out) or rho_si_out <= 0.0:
+            raise ValueError("rho_si must be a finite positive float or None.")
+        nu_si = mu / rho_si_out
 
     axis = axis_map[direction]
     pad_width = [(0, 0), (0, 0), (0, 0)]
@@ -589,18 +643,25 @@ def solve_hydraulic_conductance(
     rho_lu = float(np.mean(soln.rho[fluid]))
     mu_lu = rho_lu * float(soln.nu)
 
-    if auto_istar:
-        R_visc_lu = 16.0 * np.pi**2 * mu_lu * float(np.sum(istar_conduit))
-    else:
-        R_visc_lu = 16.0 * np.pi**2 * mu_lu * float(np.sum(istar_conduit / (A_conduit**2)))
+    # The viscous model uses sum(I* / A^2) whether I* is user-provided or image-derived.
+    R_visc_lu = 16.0 * np.pi**2 * mu_lu * float(
+        np.sum(istar_conduit / (A_conduit**2))
+    )
     R_acc_lu = 0.5 * rho_lu * Q_lu * ((alpha_2 / A2**2) - (alpha_1 / A1**2))
     R_total_lu = R_visc_lu + R_acc_lu
     g_model_lu = 1.0 / R_total_lu
 
     # LU -> SI conductance conversion [m^3/(Pa.s)]
-    scale = float(soln.nu) * float(voxel_size) ** 3 / float(mu)
+    scale = float(soln.nu) * float(voxel_size) ** 3 / mu
     g_lbm_si = g_lbm_lu * scale
     g_model_si = g_model_lu * scale
+
+    # LU -> SI resistance conversion [Pa·s/m^3]
+    # Since R = 1/g, the resistance scale is the reciprocal of conductance scale
+    r_scale = 1.0 / scale
+    R_visc_si = R_visc_lu * r_scale
+    R_acc_si = R_acc_lu * r_scale
+    R_total_si = R_total_lu * r_scale
 
     development = check_flow_development(
         fluid=fluid,
@@ -640,6 +701,12 @@ def solve_hydraulic_conductance(
         "g_model_lu": g_model_lu,
         "g_lbm_si": g_lbm_si,
         "g_model_si": g_model_si,
+        "R_visc_si": R_visc_si,
+        "R_acc_si": R_acc_si,
+        "R_total_si": R_total_si,
+        "rho_si": rho_si_out,
+        "mu_si": mu,
+        "nu_si": nu_si,
         "rho_lu": rho_lu,
         "mu_lu": mu_lu,
         "areas": areas,

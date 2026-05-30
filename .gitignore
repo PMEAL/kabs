@@ -3,3 +3,5 @@ __pycache__
 .DS_Store
 .coverage
 coverage.xml
+.leankg/leankg.db
+.leankg/leankg.yaml

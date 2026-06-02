@@ -27,8 +27,7 @@ approximation of the boundary and is typically < 5–7 % for the sizes used here
 import numpy as np
 import pytest
 
-from kabs import solve_flow
-from kabs._compute_hydraulic_conductance import compute_hydraulic_conductance
+from kabs._compute_hydraulic_conductance import solve_hydraulic_conductance
 
 # ---------------------------------------------------------------------------
 # Geometry builders  (public convention: 1 = pore, 0 = solid)
@@ -97,12 +96,14 @@ def _g_triangle(side, nu=_NU, L=_L):
 
 _SOLVE_KW = dict(
     direction="x",
-    nu=_NU,
     n_steps=4000,
     tol=1e-3,
     log_every=200,
-    verbose=False,
+    pad=0,
 )
+
+# LBM pressure BCs: rho_in=1.00, rho_out=0.99, cs^2=1/3
+_DP_LU = 0.01 / 3.0
 
 # ---------------------------------------------------------------------------
 # Cylinder tests  (R = 10)
@@ -114,22 +115,20 @@ _R = 10
 class TestCylinderConductance:
     @classmethod
     def setup_class(cls):
-        cls.result = solve_flow(_cylinder_image(_R), **_SOLVE_KW)
+        cls.out = solve_hydraulic_conductance(_cylinder_image(_R), **_SOLVE_KW)
 
     def test_conductance_vs_hagen_poiseuille(self):
         """LBM g_lu must match HP(R) within 7 %."""
-        out = compute_hydraulic_conductance(self.result, verbose=False)
+        g_lu = self.out["Q_lu"] / _DP_LU
         g_expected = _g_cylinder(r=_R)
-        assert out["g_lu"] == pytest.approx(g_expected, rel=0.07)
+        assert g_lu == pytest.approx(g_expected, rel=0.07)
 
     def test_conductance_positive(self):
-        out = compute_hydraulic_conductance(self.result, verbose=False)
-        assert out["g_lu"] > 0.0
+        assert self.out["Q_lu"] / _DP_LU > 0.0
 
     def test_pressure_drop(self):
-        """dP_lu = (ρ_in − ρ_out) · c_s² = 0.01/3."""
-        out = compute_hydraulic_conductance(self.result, verbose=False)
-        assert out["dP_lu"] == pytest.approx(0.01 / 3.0, rel=1e-6)
+        """dP_edge_lu must be close to (ρ_in − ρ_out) · c_s² = 0.01/3."""
+        assert self.out["dP_edge_lu"] == pytest.approx(0.01 / 3.0, rel=0.10)
 
 
 # ---------------------------------------------------------------------------
@@ -142,22 +141,20 @@ _SIDE = 20
 class TestTriangleConductance:
     @classmethod
     def setup_class(cls):
-        cls.result = solve_flow(_triangle_image(_SIDE), **_SOLVE_KW)
+        cls.out = solve_hydraulic_conductance(_triangle_image(_SIDE), **_SOLVE_KW)
 
     def test_conductance_vs_stokes(self):
         """LBM g_lu must match exact Stokes formula within 10 %."""
-        out = compute_hydraulic_conductance(self.result, verbose=False)
+        g_lu = self.out["Q_lu"] / _DP_LU
         g_expected = _g_triangle(side=_SIDE)
-        assert out["g_lu"] == pytest.approx(g_expected, rel=0.10)
+        assert g_lu == pytest.approx(g_expected, rel=0.10)
 
     def test_conductance_positive(self):
-        out = compute_hydraulic_conductance(self.result, verbose=False)
-        assert out["g_lu"] > 0.0
+        assert self.out["Q_lu"] / _DP_LU > 0.0
 
     def test_pressure_drop(self):
-        """dP_lu = (ρ_in − ρ_out) · c_s² = 0.01/3."""
-        out = compute_hydraulic_conductance(self.result, verbose=False)
-        assert out["dP_lu"] == pytest.approx(0.01 / 3.0, rel=1e-6)
+        """dP_edge_lu must be close to (ρ_in − ρ_out) · c_s² = 0.01/3."""
+        assert self.out["dP_edge_lu"] == pytest.approx(0.01 / 3.0, rel=0.10)
 
 
 # ---------------------------------------------------------------------------

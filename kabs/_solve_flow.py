@@ -37,11 +37,19 @@ class FlowResult:
         Flow direction used in the simulation ('x', 'y', or 'z').
     nu : float
         Kinematic viscosity in lattice units.
+    n_iterations : int or None
+        Number of LBM time steps that were actually executed.
+    convergence_criterion : float or None
+        Final value of ``delta|v| / |v|`` when the simulation stopped.
+        ``None`` if convergence was never checked (e.g. fewer than two
+        log intervals elapsed).
     """
 
-    def __init__(self, solver, direction, nu):
+    def __init__(self, solver, direction, nu, n_iterations=None, convergence_criterion=None):
         self.direction = direction
         self.nu = nu
+        self.n_iterations = n_iterations
+        self.convergence_criterion = convergence_criterion
         self._solver = solver
         self.solid = solver.solid.to_numpy()
         self.rho = solver.get_rho()
@@ -67,6 +75,8 @@ class FlowResult:
         obj = object.__new__(cls)
         obj.direction = direction
         obj.nu = nu
+        obj.n_iterations = None
+        obj.convergence_criterion = None
         obj._solver = None
         obj.solid = solid
         obj.rho = rho
@@ -156,6 +166,7 @@ def solve_flow(
     time_pre = time_init
     v_prev = None
     final_step = n_steps
+    final_criterion = None
 
     for i in range(n_steps + 1):
         solver.step()
@@ -180,19 +191,21 @@ def solve_flow(
             if v_prev is not None:
                 v_total = np.sum(np.abs(v_now))
                 v_change = np.sum(np.abs(v_now - v_prev))
+                if v_total > 0:
+                    final_criterion = v_change / v_total
                 if verbose:
                     print(f"         |v|={v_total:.4e}  delta|v|={v_change:.4e}")
-                if tol is not None and v_total > 0 and v_change / v_total < tol:
+                if tol is not None and v_total > 0 and final_criterion < tol:
                     if verbose:
                         print(
                             f"Converged at step {i} "
-                            f"(delta|v|/|v| = {v_change / v_total:.2e} < tol={tol:.2e})"
+                            f"(delta|v|/|v| = {final_criterion:.2e} < tol={tol:.2e})"
                         )
                     final_step = i
                     break
             v_prev = v_now
             time_pre = time_now
 
-    result = FlowResult(solver, direction, nu)
+    result = FlowResult(solver, direction, nu, n_iterations=final_step, convergence_criterion=final_criterion)
 
     return result

@@ -102,7 +102,7 @@ def solve_flow_xlb(
         from xlb.precision_policy import PrecisionPolicy
         from xlb.grid import grid_factory
         from xlb.operator.stepper import IncompressibleNavierStokesStepper
-        from xlb.operator.boundary_condition import EquilibriumBC, FullwayBounceBackBC
+        from xlb.operator.boundary_condition import ZouHeBC, FullwayBounceBackBC
         from xlb.operator.macroscopic import Macroscopic
     except ImportError as exc:
         raise ImportError(
@@ -170,11 +170,13 @@ def solve_flow_xlb(
     solid_indices = [solid_coords[d].tolist() for d in range(3)]
 
     # --- Boundary conditions ---
-    # Pressure BCs: equilibrium distributions at the prescribed density.
+    # Pressure BCs: Zou-He pressure BC at inlet/outlet pore voxels.
+    # This sets the density to the prescribed value and determines velocity
+    # from mass conservation — analogous to the Taichi pressure BC.
     # Solid BCs: full-way bounce-back throughout the domain.
     # Transverse faces have no explicit BC → streaming wraps around (periodic).
-    bc_inlet = EquilibriumBC(rho=_RHO_IN, u=(0.0, 0.0, 0.0), indices=inlet_indices)
-    bc_outlet = EquilibriumBC(rho=_RHO_OUT, u=(0.0, 0.0, 0.0), indices=outlet_indices)
+    bc_inlet = ZouHeBC(bc_type="pressure", prescribed_value=float(_RHO_IN), indices=inlet_indices)
+    bc_outlet = ZouHeBC(bc_type="pressure", prescribed_value=float(_RHO_OUT), indices=outlet_indices)
     boundary_conditions = [bc_inlet, bc_outlet]
 
     if solid_coords[0].size > 0:

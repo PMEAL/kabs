@@ -1,0 +1,31 @@
+/*-- scss:defaults --*/
+
+// Override materia theme colors from blue to orange
+// Keep greytones unchanged
+
+// Define orange as the primary color
+$primary: #E67E22;
+$primary-rgb: 230, 126, 34;
+
+// Secondary colors adjusted to work with orange
+$secondary: #D35400;
+$secondary-rgb: 211, 84, 0;
+
+// Info color (typically blue) changed to orange
+$info: #E67E22;
+$info-rgb: 230, 126, 34;
+
+// Light/dark orange accents
+$light-orange: #FDEBD0;
+$dark-orange: #A04000;
+
+// Keep success, danger, warning in their original colors
+// (these don't need to be changed since they're independent)
+// They'll inherit or you can explicitly keep them if needed
+
+// Optional: Tint and shade functions for generating light/dark variants
+// These work with the primary color automatically
+$primary-light: lighten($primary, 20%);
+$primary-lighter: lighten($primary, 40%);
+$primary-dark: darken($primary, 20%);
+$primary-darker: darken($primary, 40%);

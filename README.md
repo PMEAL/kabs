@@ -1,4 +1,4 @@
-![](logo.png)
+![](kabs_logo.png)
 
 [![Tests](https://github.com/PMEAL/kabs/actions/workflows/tests.yml/badge.svg)](https://github.com/PMEAL/kabs/actions/workflows/tests.yml)
 [![codecov](https://codecov.io/gh/PMEAL/kabs/branch/dev/graph/badge.svg)](https://codecov.io/gh/PMEAL/kabs)

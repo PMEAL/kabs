@@ -1,10 +1,15 @@
 """High-level entry point: run a single-phase LBM flow simulation."""
 
 import time
+from typing import Literal
 
 import numpy as np
 
-from ._single_phase_solver import SinglePhaseSolver
+from ._single_phase_solver import (
+    SinglePhaseSolver,
+    _DEFAULT_SPARSE,
+    _DEFAULT_STORAGE,
+)
 from .utils import write_flow_vtr
 
 
@@ -101,8 +106,11 @@ def solve_flow(
     nu=1.0 / 6.0,
     log_every=500,
     verbose=True,
-    sparse=False,
+    sparse=_DEFAULT_SPARSE,
     tol=1e-3,
+    *,
+    storage: Literal["dense", "tiled", "sparse"] = _DEFAULT_STORAGE,
+    tile_size: int | tuple[int, int, int] = 16,
 ):
     """
     Run a pressure-driven single-phase LBM simulation to steady state.
@@ -123,15 +131,23 @@ def solve_flow(
     verbose : bool
         Print progress to stdout.  Default True.
     sparse : bool
-        If True, use Taichi sparse (pointer-backed) storage for the
-        distribution fields.  Only pore cells are allocated, which can
-        significantly reduce memory on images with high solid fractions.
-        Default False (dense storage).
+        Backwards-compatible alias for storage.  ``True`` selects ``'sparse'``
+        and ``False`` selects ``'dense'``.  Contradictory explicit values for
+        ``sparse`` and ``storage`` raise ``ValueError``.  Default False.
     tol : float or None
         Convergence tolerance.  The simulation stops early when the relative
         change in the total velocity magnitude between log intervals falls
         below this value: ``delta|v| / |v| < tol``.  Set to ``None`` to
         always run the full ``n_steps``.  Default 1e-3.
+    storage : {'dense', 'tiled', 'sparse'}, keyword-only
+        Taichi storage layout.  ``'dense'`` is fastest for small images but is
+        subject to Taichi's monolithic field-index limit.  ``'tiled'`` places
+        the fields in pointer-backed dense tiles and activates every image
+        tile.  ``'sparse'`` uses the same hierarchy but activates only tiles
+        containing pore voxels.  Default ``'dense'``.
+    tile_size : int or tuple of 3 ints, keyword-only
+        Dense tile dimensions for tiled and sparse storage.  An integer uses
+        the same size along all axes.  Default 16.
 
     Returns
     -------
@@ -147,6 +163,10 @@ def solve_flow(
 
         import taichi as ti
         ti.init(arch=ti.cpu)
+
+    Tiled storage removes the monolithic-index limit, not the underlying
+    memory cost.  Fully activating a large porous image can still require far
+    more memory than the available host or accelerator memory.
     """
     direction = direction.lower()
     if direction not in _BC_SETTERS:
@@ -155,7 +175,12 @@ def solve_flow(
     # Public convention: 1=pore, 0=solid (PoreSpy-compatible).
     # SinglePhaseSolver uses the opposite, so flip here.
     solid_im = (im == 0).astype(np.int8)
-    solver = SinglePhaseSolver(solid_im, sparse_storage=sparse)
+    solver = SinglePhaseSolver(
+        solid_im,
+        sparse_storage=sparse,
+        storage=storage,
+        tile_size=tile_size,
+    )
     set_inlet, set_outlet = _BC_SETTERS[direction]
     getattr(solver, set_inlet)(_RHO_IN)
     getattr(solver, set_outlet)(_RHO_OUT)
@@ -187,7 +212,7 @@ def solve_flow(
                     f"elapsed {h_e:02d}h{m_e:02d}m{s_e:02d}s"
                 )
 
-            v_now = solver.v.to_numpy()
+            v_now = solver.get_velocity()
             if v_prev is not None:
                 v_total = np.sum(np.abs(v_now))
                 v_change = np.sum(np.abs(v_now - v_prev))

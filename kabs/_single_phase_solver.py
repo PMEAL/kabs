@@ -1,6 +1,6 @@
 import taichi as ti
 import numpy as np
-from pyevtk.hl import gridToVTK
+from typing import Literal
 
 
 __all__ = [
@@ -15,11 +15,104 @@ bc_defs = {
 }
 
 
+class _DefaultValue:
+    """Sentinel whose repr keeps backwards-compatible signature defaults readable."""
+
+    def __init__(self, value):
+        self.value = value
+
+    def __repr__(self):
+        return repr(self.value)
+
+
+_DEFAULT_STORAGE = _DefaultValue("dense")
+_DEFAULT_SPARSE = _DefaultValue(False)
+
+
+def _normalize_storage(storage, sparse):
+    storage_was_given = storage is not _DEFAULT_STORAGE
+    sparse_was_given = sparse is not _DEFAULT_SPARSE
+    storage = "dense" if not storage_was_given else storage
+
+    if storage not in ("dense", "tiled", "sparse"):
+        raise ValueError(
+            "storage must be 'dense', 'tiled', or 'sparse', "
+            f"got {storage!r}"
+        )
+
+    if sparse_was_given:
+        if not isinstance(sparse, (bool, np.bool_)):
+            raise TypeError(f"sparse must be a bool, got {type(sparse).__name__}")
+        alias_storage = "sparse" if sparse else "dense"
+        if storage_was_given and storage != alias_storage:
+            raise ValueError(
+                f"contradictory storage options: sparse={bool(sparse)!r} "
+                f"selects storage={alias_storage!r}, but storage={storage!r}"
+            )
+        storage = alias_storage
+
+    return storage
+
+
+def _normalize_tile_size(tile_size):
+    if isinstance(tile_size, (int, np.integer)) and not isinstance(tile_size, bool):
+        tile_size = (int(tile_size),) * 3
+    else:
+        try:
+            tile_size = tuple(tile_size)
+        except TypeError as exc:
+            raise TypeError("tile_size must be an int or a length-3 tuple of ints") from exc
+        if len(tile_size) != 3:
+            raise ValueError("tile_size must contain exactly three dimensions")
+        if any(not isinstance(n, (int, np.integer)) or isinstance(n, bool) for n in tile_size):
+            raise TypeError("tile_size dimensions must be integers")
+        tile_size = tuple(int(n) for n in tile_size)
+
+    if any(n <= 0 for n in tile_size):
+        raise ValueError("tile_size dimensions must all be positive")
+    return tile_size
+
+
+def _create_tiled_population_fields(shape, tile_size):
+    """Create unactivated pointer-backed D3Q19 fields for a logical shape."""
+    nx, ny, nz = shape
+    tx, ty, tz = tile_size
+    f = ti.Vector.field(19, ti.f32)
+    F = ti.Vector.field(19, ti.f32)
+    rho = ti.field(ti.f32)
+    v = ti.Vector.field(3, ti.f32)
+    blocks = ti.root.pointer(
+        ti.ijk,
+        (
+            (nx + tx - 1) // tx,
+            (ny + ty - 1) // ty,
+            (nz + tz - 1) // tz,
+        ),
+    )
+    cells = blocks.dense(ti.ijk, tile_size)
+    cells.place(rho, v, f, F)
+    return rho, v, f, F, blocks, cells
+
+
 @ti.data_oriented
 class SinglePhaseSolver:
-    def __init__(self, im, sparse_storage=False):
+    def __init__(
+        self,
+        im,
+        sparse_storage=_DEFAULT_SPARSE,
+        *,
+        storage: Literal["dense", "tiled", "sparse"] = _DEFAULT_STORAGE,
+        tile_size: int | tuple[int, int, int] = 16,
+    ):
+        """Create a solver using dense, fully tiled, or pore-tile storage.
+
+        ``sparse_storage`` is retained as an alias for older callers.  New code
+        should use ``storage`` and ``tile_size``.
+        """
         self.enable_projection = True
-        self.sparse_storage = sparse_storage
+        self.storage = _normalize_storage(storage, sparse_storage)
+        self.sparse_storage = self.storage == "sparse"
+        self.tile_size = _normalize_tile_size(tile_size)
         object.__setattr__(self, "_last_vtr", None)
 
         nx, ny, nz = im.shape
@@ -82,7 +175,7 @@ class SinglePhaseSolver:
         self.vy_bczr = 0.0
         self.vz_bczr = 0.0
 
-        if self.sparse_storage == False:
+        if self.storage == "dense":
             self.f = ti.Vector.field(
                 19, ti.f32, shape=(nx, ny, nz), layout=ti.Layout.SOA
             )
@@ -92,23 +185,17 @@ class SinglePhaseSolver:
             self.rho = ti.field(ti.f32, shape=(nx, ny, nz))
             self.v = ti.Vector.field(3, ti.f32, shape=(nx, ny, nz))
         else:
-            self.f = ti.Vector.field(19, ti.f32)
-            self.F = ti.Vector.field(19, ti.f32)
-            self.rho = ti.field(ti.f32)
-            self.v = ti.Vector.field(3, ti.f32)
-            n_mem_partition = 3
-
-            cell1 = ti.root.pointer(
-                ti.ijk,
-                (
-                    nx // n_mem_partition + 1,
-                    ny // n_mem_partition + 1,
-                    nz // n_mem_partition + 1,
-                ),
+            (
+                self.rho,
+                self.v,
+                self.f,
+                self.F,
+                self._population_blocks,
+                self._population_cells,
+            ) = _create_tiled_population_fields(
+                (nx, ny, nz),
+                self.tile_size,
             )
-            cell1.dense(
-                ti.ijk, (n_mem_partition, n_mem_partition, n_mem_partition)
-            ).place(self.rho, self.v, self.f, self.F)
 
         self.e = ti.Vector.field(3, ti.i32, shape=(19))
         self.S_dig = ti.Vector.field(19, ti.f32, shape=())
@@ -199,7 +286,18 @@ class SinglePhaseSolver:
             self.force_flag = 0
         ti.static(self.S_dig)
         self.static_init()
+        if self.storage == "tiled":
+            self.activate_all_tiles()
         self.init()
+
+    @ti.kernel
+    def activate_all_tiles(self):
+        for i, j, k in ti.ndrange(
+            (0, (self.nx + self.tile_size[0] - 1) // self.tile_size[0]),
+            (0, (self.ny + self.tile_size[1] - 1) // self.tile_size[1]),
+            (0, (self.nz + self.tile_size[2] - 1) // self.tile_size[2]),
+        ):
+            ti.activate(self._population_blocks, [i, j, k])
 
     @ti.func
     def feq(self, k, rho_local, u):
@@ -211,7 +309,9 @@ class SinglePhaseSolver:
     @ti.kernel
     def init(self):
         for i, j, k in self.solid:
-            if (self.sparse_storage == False) or (self.solid[i, j, k] == 0):
+            # Writing every logical cell activates every tile in tiled mode.
+            # Sparse mode activates only tiles containing at least one pore.
+            if ti.static(self.storage != "sparse") or (self.solid[i, j, k] == 0):
                 self.rho[i, j, k] = 1.0
                 self.v[i, j, k] = ti.Vector([0, 0, 0])
                 for s in ti.static(range(19)):
@@ -304,7 +404,12 @@ class SinglePhaseSolver:
     @ti.kernel
     def collision(self):
         for i, j, k in self.rho:
-            if self.solid[i, j, k] == 0:
+            if (
+                i < self.nx
+                and j < self.ny
+                and k < self.nz
+                and self.solid[i, j, k] == 0
+            ):
                 m_temp = ti.Vector([0.0] * 19)
                 for row in ti.static(range(19)):
                     for col in ti.static(range(19)):
@@ -356,7 +461,12 @@ class SinglePhaseSolver:
     @ti.kernel
     def streaming1(self):
         for i in ti.grouped(self.rho):
-            if self.solid[i] == 0:
+            if (
+                i.x < self.nx
+                and i.y < self.ny
+                and i.z < self.nz
+                and self.solid[i] == 0
+            ):
                 for s in ti.static(range(19)):
                     ip = self.periodic_index(i + self.e[s])
                     if self.solid[ip] == 0:
@@ -461,23 +571,24 @@ class SinglePhaseSolver:
     @ti.kernel
     def streaming3(self):
         for i in ti.grouped(self.rho):
-            if self.solid[i] == 0:
-                self.rho[i] = 0
-                self.v[i] = ti.Vector([0, 0, 0])
-                self.f[i] = self.F[i]
-                self.rho[i] += self.f[i].sum()
+            if i.x < self.nx and i.y < self.ny and i.z < self.nz:
+                if self.solid[i] == 0:
+                    self.rho[i] = 0
+                    self.v[i] = ti.Vector([0, 0, 0])
+                    self.f[i] = self.F[i]
+                    self.rho[i] += self.f[i].sum()
 
-                for s in ti.static(range(19)):
-                    self.v[i] += self.e_f[s] * self.f[i][s]
+                    for s in ti.static(range(19)):
+                        self.v[i] += self.e_f[s] * self.f[i][s]
 
-                f = self.calc_local_force(i.x, i.y, i.z)
+                    f = self.calc_local_force(i.x, i.y, i.z)
 
-                self.v[i] /= self.rho[i]
-                self.v[i] += (f / 2) / self.rho[i]
+                    self.v[i] /= self.rho[i]
+                    self.v[i] += (f / 2) / self.rho[i]
 
-            else:
-                self.rho[i] = 1.0
-                self.v[i] = ti.Vector([0, 0, 0])
+                else:
+                    self.rho[i] = 1.0
+                    self.v[i] = ti.Vector([0, 0, 0])
 
     def get_max_v(self):
         self.max_v[None] = -1e10
@@ -487,7 +598,8 @@ class SinglePhaseSolver:
     @ti.kernel
     def calc_max_v(self):
         for idx in ti.grouped(self.rho):
-            ti.atomic_max(self.max_v[None], self.v[idx].norm())
+            if idx.x < self.nx and idx.y < self.ny and idx.z < self.nz:
+                ti.atomic_max(self.max_v[None], self.v[idx].norm())
 
     def step(self):
         self.collision()
@@ -521,7 +633,12 @@ class SinglePhaseSolver:
 
     def get_rho(self):
         """Return the density field as a numpy array trimmed to the domain shape."""
-        return self.rho.to_numpy()[: self.nx, : self.ny, : self.nz]
+        rho = self.rho.to_numpy()[: self.nx, : self.ny, : self.nz]
+        if self.storage == "sparse":
+            # Inactive tiles contain only solid voxels and read back as zero.
+            # Match the dense solver's public solid-cell density convention.
+            rho[self.solid.to_numpy() != 0] = 1.0
+        return rho
 
     def get_velocity(self):
         """Return the velocity field as a numpy array trimmed to the domain shape."""

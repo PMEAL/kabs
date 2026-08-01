@@ -3,5 +3,12 @@ __pycache__
 .DS_Store
 .coverage
 coverage.xml
+
+docs/_site
+docs/.quarto/
+docs/**/*.quarto_ipynb
+
+docs/reference
+docs/objects.json
 .leankg/leankg.db
 .leankg/leankg.yaml

@@ -1,7 +1,8 @@
-# `kabs`
+![](kabs_logo.png)
 
 [![Tests](https://github.com/PMEAL/kabs/actions/workflows/tests.yml/badge.svg)](https://github.com/PMEAL/kabs/actions/workflows/tests.yml)
 [![codecov](https://codecov.io/gh/PMEAL/kabs/branch/dev/graph/badge.svg)](https://codecov.io/gh/PMEAL/kabs)
+
 
 `kabs` computes the absolute (Darcy) permeability of a porous material from its 3D tomographic image using the Lattice Boltzmann Method (LBM). Given a binary voxel image of the pore space, it solves single-phase incompressible creeping flow, returning results in lattice units or physical units.
 

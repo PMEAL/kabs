@@ -1,7 +1,8 @@
-# `kabs`
+![](kabs_logo.png)
 
 [![Tests](https://github.com/PMEAL/kabs/actions/workflows/tests.yml/badge.svg)](https://github.com/PMEAL/kabs/actions/workflows/tests.yml)
 [![codecov](https://codecov.io/gh/PMEAL/kabs/branch/dev/graph/badge.svg)](https://codecov.io/gh/PMEAL/kabs)
+
 
 `kabs` computes the absolute (Darcy) permeability of a porous material from its 3D tomographic image using the Lattice Boltzmann Method (LBM). Given a binary voxel image of the pore space, it solves single-phase incompressible creeping flow, returning results in lattice units or physical units.
 
@@ -128,14 +129,28 @@ result = read_flow_vtr("sample-1000-x.vtr")
 results = compute_permeability(result, dx_m=2.85e-6)
 ```
 
-### Memory-efficient sparse storage
+### Storage layouts
 
-For images with a high solid fraction, enable sparse storage so only pore voxels are
-allocated in GPU memory:
+Choose the field layout based on image size and solid fraction:
+
+- `dense` (the default) is fastest for small images, but its monolithic Taichi
+  fields are subject to a signed 32-bit index-stride limit.
+- `tiled` uses pointer-backed dense tiles and activates every tile intersecting
+  the image. It avoids the monolithic stride limit, but does not reduce storage
+  for a fully porous volume.
+- `sparse` uses the same tiled hierarchy but activates only tiles containing at
+  least one pore voxel, which is useful for mostly-solid images.
 
 ```python
-result = solve_flow(im, direction="x", sparse=True)
+result = solve_flow(im, direction="x", storage="tiled", tile_size=16)
+result = solve_flow(im, direction="x", storage="sparse", tile_size=(8, 8, 16))
 ```
+
+The older `sparse=True` option remains an alias for `storage="sparse"`.
+Tiles at the image edge are padded internally; padded cells are treated as solid
+and are never returned. Tiling removes the Taichi indexing limit, not the memory
+cost: a fully porous 900³ D3Q19 simulation needs well over 100 GB for the two
+distribution fields alone.
 
 ## Return values (permeability)
 

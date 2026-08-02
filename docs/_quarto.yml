@@ -1,33 +1,38 @@
 project:
   type: website
-
 website:
-  title: "kabs"
+  title: kabs
+  site-url: https://kabs.poromics.org
   navbar:
     left:
-      - href: index.qmd
-        text: Home
-      - reference/index.qmd
-
+    - href: reference/index.qmd
+      text: Reference
+    - href: notebooks/index.qmd
+      text: Examples
+    right:
+      - href: https://www.poromics.org
+        text: poromics
+      - icon: github
+        href: https://github.com/PMEAL/kabs
+    
 metadata-files:
-  - reference/_sidebar.yml
-
+- reference/_sidebar.yml
 format:
   html:
     theme:
-      - cosmo
-      - brand
+    - materia
+    - custom.scss
     css: styles.css
     toc: true
 
 quartodoc:
   package: kabs
   dynamic: true
-
-  # write sidebar and style data
+  rewrite_all_pages: true
+  options:
+    include_imports: true
   sidebar: reference/_sidebar.yml
   css: reference/_styles-quartodoc.css
-
   sections:
     - title: Core Functions
       desc: "Solve flow and compute transport properties"
@@ -47,4 +52,3 @@ quartodoc:
         - plots.plot_cross_section
         - plots.add_streamlines
         - plots.render_flow
-          

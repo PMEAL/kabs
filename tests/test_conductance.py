@@ -1,4 +1,4 @@
-"""Tests for compute_hydraulic_conductance against analytical Stokes-flow solutions.
+"""Tests for solve_hydraulic_conductance against analytical Stokes-flow solutions.
 
 Two tube geometries with exact solutions are tested:
 

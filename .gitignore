@@ -12,3 +12,4 @@ docs/reference
 docs/objects.json
 .leankg/leankg.db
 .leankg/leankg.yaml
+.claude

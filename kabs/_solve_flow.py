@@ -154,7 +154,7 @@ def solve_flow_taichi(
     result : FlowResult
         Result object containing ``solid``, ``rho``, ``velocity``, ``direction``,
         and ``nu`` as numpy arrays/values.  Pass directly to
-        ``compute_permeability()`` or ``compute_hydraulic_conductance()``,
+        ``compute_permeability()`` or ``solve_hydraulic_conductance()``,
         or call ``result.export_to_vtk(prefix)`` to save a VTR file.
 
     Notes
@@ -273,7 +273,7 @@ def solve_flow(
     -------
     FlowResult
         The converged density and velocity fields, compatible with
-        ``compute_permeability()`` and ``compute_hydraulic_conductance()``.
+        ``compute_permeability()`` and ``solve_hydraulic_conductance()``.
     """
     try:
         backend_key = backend.lower()

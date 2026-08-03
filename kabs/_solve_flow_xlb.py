@@ -34,7 +34,7 @@ def solve_flow_xlb(
     This is the XLB-specific implementation used by
     ``solve_flow(backend='xlb')``. It returns the same ``FlowResult`` object
     and is fully compatible with the downstream ``compute_permeability()`` and
-    ``compute_hydraulic_conductance()`` functions.
+    ``solve_hydraulic_conductance()`` functions.
 
     Parameters
     ----------
@@ -67,7 +67,7 @@ def solve_flow_xlb(
     result : FlowResult
         Result object containing ``solid``, ``rho``, ``velocity``,
         ``direction``, and ``nu`` as numpy arrays/values.  Pass directly to
-        ``compute_permeability()`` or ``compute_hydraulic_conductance()``,
+        ``compute_permeability()`` or ``solve_hydraulic_conductance()``,
         or call ``result.export_to_vtk(prefix)`` to save a VTR file.
 
     Notes

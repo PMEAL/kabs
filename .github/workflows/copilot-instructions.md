@@ -8,7 +8,7 @@
 - `kabs/_single_phase_solver.py` — `SinglePhaseSolver` class: D3Q19 MRT-LBM Taichi kernels (collision, streaming, BCs)
 - `kabs/_solve_flow.py` — `solve_flow()` entry point and `FlowResult` container class; sets BCs, runs loop, handles convergence; returns a `FlowResult`
 - `kabs/_compute_permeability.py` — `compute_permeability()`: accepts a `FlowResult`, applies Darcy's law
-- `kabs/_compute_hydraulic_conductance.py` — `compute_hydraulic_conductance()`: accepts a `FlowResult`, computes Q/ΔP conductance
+- `kabs/_compute_hydraulic_conductance.py` — `solve_hydraulic_conductance()`: accepts a `FlowResult`, computes Q/ΔP conductance
 - `kabs/utils.py` — `read_flow_vtr()` / `write_flow_vtr()`: VTR file I/O (pure `numpy` + `struct`, no pyvista dependency); embeds `direction` and `nu` as an XML comment for round-trip fidelity
 - `kabs/plots.py` — `plot_cross_section()`, `add_streamlines()`, `render_flow()`: visualization helpers
 

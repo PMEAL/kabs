@@ -19,8 +19,11 @@ Two LBM implementations are offered. One is adapted from
 ```bash
 git clone https://github.com/PMEAL/kabs.git
 cd kabs
-pip install -e .
+uv sync
 ```
+
+Alternatively, install with `pip install -e .`. This installs both solvers:
+Taichi and XLB, with `warp-lang==1.10.0` pinned for compatibility with XLB.
 
 Key dependencies: `taichi` (GPU/CPU acceleration), `xlb`, `numpy`, `pyevtk`.
 Optional: `porespy` (used in the examples below to generate synthetic images).
@@ -54,19 +57,22 @@ print(f"k = {results['k_lu']:.4e} voxels²")
 
 ## Common usage patterns
 
-### GPU acceleration
+### Taichi acceleration
 
-Taichi supports CUDA, Metal, and Vulkan backends.  Switch by changing `ti.init`:
+The default solver uses Taichi. Initialize Taichi before its first solve and
+select the architecture appropriate to your hardware:
 
 ```python
 ti.init(arch=ti.gpu)   # picks the best available GPU backend
 ti.init(arch=ti.cuda)  # CUDA explicitly
+ti.init(arch=ti.metal) # Apple Silicon GPU
 ```
 
 ### Solver backends
 
-`solve_flow` uses the Taichi implementation by default. Select the XLB solver
-through the same API; its JAX backend also supports multi-GPU execution:
+`solve_flow` uses the Taichi implementation by default. Select XLB through the
+same API; its default JAX compute backend works on CPU and supports multi-GPU
+execution on supported accelerator platforms:
 
 ```python
 # Default: solve_flow(im, backend="taichi")
@@ -76,6 +82,11 @@ result = solve_flow(im, backend="xlb", compute_backend="jax")
 The implementation-specific entry points, `solve_flow_taichi` and
 `solve_flow_xlb`, remain available for advanced use. Taichi-only `storage`,
 `tile_size`, and `sparse` options are not supported by XLB.
+
+XLB's `compute_backend="warp"` targets NVIDIA CUDA; it is not an Apple Metal
+backend. On macOS, use `compute_backend="jax"` (the default), which runs on
+CPU with the standard JAX installation. To use Taichi Metal and XLB in the
+same comparison, prefer separate notebook kernels or processes.
 
 ### Physical units
 

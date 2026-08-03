@@ -41,7 +41,7 @@ quartodoc:
         - solve_flow_taichi
         - solve_flow_xlb
         - compute_permeability
-        - compute_hydraulic_conductance
+        - solve_hydraulic_conductance
         - FlowResult
     - title: Utilities
       desc: "VTR file I/O"

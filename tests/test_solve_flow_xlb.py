@@ -64,6 +64,16 @@ def _tiny_image():
     return np.broadcast_to(cross[np.newaxis], (10, 12, 12)).copy().astype(int)
 
 
+def _edge_channel_image(direction, length=12):
+    """One-voxel pore channel placed on an edge of each pressure face."""
+    im = np.zeros((length, length, length), dtype=np.int8)
+    axis = {"x": 0, "y": 1, "z": 2}[direction]
+    pore = [0, 0, 0]
+    pore[axis] = slice(None)
+    im[tuple(pore)] = 1
+    return im
+
+
 # ---------------------------------------------------------------------------
 # Suite 1: Structural / smoke tests
 # ---------------------------------------------------------------------------
@@ -149,6 +159,29 @@ class TestSolveFlowXlbSmoke:
     def test_xlb_rejects_taichi_storage_options(self):
         with pytest.raises(ValueError, match="only supported with backend='taichi'"):
             solve_flow(self.im, backend="xlb", storage="tiled")
+
+
+@pytest.mark.parametrize(("direction", "axis"), [("x", 0), ("y", 1), ("z", 2)])
+def test_flow_reaches_edge_pores_on_all_pressure_faces(direction, axis):
+    """Pressure BCs must cover pore voxels at face edges and corners."""
+    im = _edge_channel_image(direction)
+    result = solve_flow_xlb(
+        im,
+        direction=direction,
+        nu=_NU,
+        n_steps=400,
+        tol=None,
+        log_every=100,
+        verbose=False,
+    )
+    pore = result.solid == 0
+    assert float(result.velocity[..., axis][pore].mean()) > 0.0
+
+    inlet = [0, 0, 0]
+    outlet = [0, 0, 0]
+    outlet[axis] = -1
+    assert result.rho[tuple(inlet)] == pytest.approx(1.00, abs=1e-4)
+    assert result.rho[tuple(outlet)] == pytest.approx(0.99, abs=1e-4)
 
 
 # ---------------------------------------------------------------------------

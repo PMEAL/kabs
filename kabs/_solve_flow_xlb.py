@@ -96,13 +96,30 @@ def solve_flow_xlb(
         pip install "xlb>=0.3.1" "warp-lang==1.10.0"  # CPU/JAX
         pip install "xlb[cuda]>=0.3.1" "warp-lang==1.10.0"  # NVIDIA GPU via JAX
     """
+    if not isinstance(direction, str) or direction.lower() not in _FACE_NAMES:
+        raise ValueError(f"direction must be 'x', 'y', or 'z', got {direction!r}")
+    direction = direction.lower()
+
+    if (
+        not isinstance(compute_backend, str)
+        or compute_backend.lower() not in {"jax", "warp"}
+    ):
+        raise ValueError(
+            f"compute_backend must be 'jax' or 'warp', got {compute_backend!r}"
+        )
+    backend_key = compute_backend.lower()
+
     try:
         import xlb
         from xlb.compute_backend import ComputeBackend
         from xlb.precision_policy import PrecisionPolicy
         from xlb.grid import grid_factory
         from xlb.operator.stepper import IncompressibleNavierStokesStepper
-        from xlb.operator.boundary_condition import ZouHeBC, FullwayBounceBackBC
+        from xlb.operator.boundary_condition import (
+            EquilibriumBC,
+            FullwayBounceBackBC,
+            ZouHeBC,
+        )
         from xlb.operator.macroscopic import Macroscopic
     except ImportError as exc:
         raise ImportError(
@@ -110,16 +127,7 @@ def solve_flow_xlb(
             "    pip install 'xlb>=0.3.1' 'warp-lang==1.10.0'\n"
         ) from exc
 
-    direction = direction.lower()
-    if direction not in _FACE_NAMES:
-        raise ValueError(f"direction must be 'x', 'y', or 'z', got {direction!r}")
-
     _backend_map = {"jax": ComputeBackend.JAX, "warp": ComputeBackend.WARP}
-    backend_key = compute_backend.lower()
-    if backend_key not in _backend_map:
-        raise ValueError(
-            f"compute_backend must be 'jax' or 'warp', got {compute_backend!r}"
-        )
     _backend = _backend_map[backend_key]
 
     # --- Initialize XLB (safe to call multiple times) ---
@@ -147,21 +155,33 @@ def solve_flow_xlb(
     # --- Build XLB grid and resolve boundary indices ---
     grid = grid_factory((nx, ny, nz), compute_backend=_backend)
 
-    # remove_edges=True avoids assigning corner/edge voxels to both the
-    # pressure BC and any transverse-face BC, consistent with XLB conventions.
-    box_no_edge = grid.bounding_box_indices(remove_edges=True)
+    # Pressure boundaries must include every pore voxel on their face. Zou-He
+    # is well-defined on face interiors, while edge and corner nodes need a
+    # full equilibrium condition because they have multiple missing directions.
+    box_face = grid.bounding_box_indices(remove_edges=False)
 
     inlet_name, outlet_name = _FACE_NAMES[direction]
 
+    flow_axis = {"x": 0, "y": 1, "z": 2}[direction]
+
     def _pore_face_indices(face_key):
-        """Return face voxel indices restricted to pore voxels."""
-        idx = np.array(box_no_edge[face_key])  # shape (3, n)
+        """Return interior and edge/corner pore indices for a domain face."""
+        idx = np.array(box_face[face_key])  # shape (3, n)
         xs, ys, zs = idx[0], idx[1], idx[2]
         is_pore = ~solid_mask[xs, ys, zs]
-        return [idx[d][is_pore].tolist() for d in range(3)]
+        is_edge = np.zeros(idx.shape[1], dtype=bool)
+        for axis, size in enumerate(im.shape):
+            if axis != flow_axis:
+                is_edge |= (idx[axis] == 0) | (idx[axis] == size - 1)
+        interior = is_pore & ~is_edge
+        edge = is_pore & is_edge
+        return (
+            [idx[d][interior].tolist() for d in range(3)],
+            [idx[d][edge].tolist() for d in range(3)],
+        )
 
-    inlet_indices = _pore_face_indices(inlet_name)
-    outlet_indices = _pore_face_indices(outlet_name)
+    inlet_indices, inlet_edge_indices = _pore_face_indices(inlet_name)
+    outlet_indices, outlet_edge_indices = _pore_face_indices(outlet_name)
 
     # All solid voxels throughout the domain
     solid_coords = np.where(solid_mask)
@@ -173,9 +193,35 @@ def solve_flow_xlb(
     # from mass conservation — analogous to the Taichi pressure BC.
     # Solid BCs: full-way bounce-back throughout the domain.
     # Transverse faces have no explicit BC → streaming wraps around (periodic).
-    bc_inlet = ZouHeBC(bc_type="pressure", prescribed_value=float(_RHO_IN), indices=inlet_indices)
-    bc_outlet = ZouHeBC(bc_type="pressure", prescribed_value=float(_RHO_OUT), indices=outlet_indices)
-    boundary_conditions = [bc_inlet, bc_outlet]
+    boundary_conditions = []
+    if inlet_indices[0]:
+        boundary_conditions.append(
+            ZouHeBC(
+                bc_type="pressure",
+                prescribed_value=float(_RHO_IN),
+                indices=inlet_indices,
+            )
+        )
+    if outlet_indices[0]:
+        boundary_conditions.append(
+            ZouHeBC(
+                bc_type="pressure",
+                prescribed_value=float(_RHO_OUT),
+                indices=outlet_indices,
+            )
+        )
+    if inlet_edge_indices[0]:
+        boundary_conditions.append(
+            EquilibriumBC(
+                rho=float(_RHO_IN), u=(0.0, 0.0, 0.0), indices=inlet_edge_indices
+            )
+        )
+    if outlet_edge_indices[0]:
+        boundary_conditions.append(
+            EquilibriumBC(
+                rho=float(_RHO_OUT), u=(0.0, 0.0, 0.0), indices=outlet_edge_indices
+            )
+        )
 
     if solid_coords[0].size > 0:
         bc_solid = FullwayBounceBackBC(indices=solid_indices)

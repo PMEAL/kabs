@@ -4,13 +4,13 @@
 [![codecov](https://codecov.io/gh/PMEAL/kabs/branch/dev/graph/badge.svg)](https://codecov.io/gh/PMEAL/kabs)
 
 
-`kabs` computes the absolute (Darcy) permeability of a porous material from its 3D tomographic image using the Lattice Boltzmann Method (LBM). Given a binary voxel image of the pore space, it solves single-phase incompressible creeping flow, returning results in lattice units or physical units.
+`kabs` computes the absolute (Darcy) permeability of a porous material from its 3D tomographic image using the Lattice Boltzmann Method (LBM). Given a boolean voxel image of the pore space, it solves single-phase incompressible creeping flow, returning results in lattice units or physical units.
 
 ![](taichi_lbm.png)
 
-The LBM implementation is adapted from
+Two LBM implementations are offered. One is adapted from
 [Taichi-LBM3D](https://github.com/yjhp1016/taichi_LBM3D)
-([DOI](https://doi.org/10.3390/fluids7080270)) by Jianhui Yang.
+([DOI](https://doi.org/10.3390/fluids7080270)) by Jianhui Yang. The other is adapted from the [XLB package](https://github.com/Autodesk/XLB) offered by Autodesk.
 
 ---
 
@@ -22,7 +22,7 @@ cd kabs
 pip install -e .
 ```
 
-Key dependencies: `taichi` (GPU/CPU acceleration), `numpy`, `pyevtk`.
+Key dependencies: `taichi` (GPU/CPU acceleration), `xlb`, `numpy`, `pyevtk`.
 Optional: `porespy` (used in the examples below to generate synthetic images).
 
 ---
@@ -62,6 +62,20 @@ Taichi supports CUDA, Metal, and Vulkan backends.  Switch by changing `ti.init`:
 ti.init(arch=ti.gpu)   # picks the best available GPU backend
 ti.init(arch=ti.cuda)  # CUDA explicitly
 ```
+
+### Solver backends
+
+`solve_flow` uses the Taichi implementation by default. Select the XLB solver
+through the same API; its JAX backend also supports multi-GPU execution:
+
+```python
+# Default: solve_flow(im, backend="taichi")
+result = solve_flow(im, backend="xlb", compute_backend="jax")
+```
+
+The implementation-specific entry points, `solve_flow_taichi` and
+`solve_flow_xlb`, remain available for advanced use. Taichi-only `storage`,
+`tile_size`, and `sparse` options are not supported by XLB.
 
 ### Physical units
 

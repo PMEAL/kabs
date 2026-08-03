@@ -6,7 +6,7 @@ import sys
 import numpy as np
 import pytest
 
-from kabs import solve_flow
+from kabs import solve_flow, solve_flow_taichi
 from kabs._compute_permeability import compute_permeability
 from kabs._single_phase_solver import SinglePhaseSolver
 
@@ -41,6 +41,15 @@ def test_sparse_alias_and_explicit_storage_agree():
 def test_sparse_false_remains_dense():
     result = solve_flow(_channel(), sparse=False, **_QUICK_SOLVE)
     assert result._solver.storage == "dense"
+
+
+def test_explicit_taichi_backend_matches_dispatcher_default():
+    dispatched = solve_flow(_channel(), **_QUICK_SOLVE)
+    direct = solve_flow_taichi(_channel(), **_QUICK_SOLVE)
+    np.testing.assert_allclose(dispatched.rho, direct.rho, rtol=1e-6, atol=1e-7)
+    np.testing.assert_allclose(
+        dispatched.velocity, direct.velocity, rtol=1e-6, atol=1e-7
+    )
 
 
 @pytest.mark.parametrize(

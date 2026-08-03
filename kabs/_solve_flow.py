@@ -13,7 +13,7 @@ from ._single_phase_solver import (
 from .utils import write_flow_vtr
 
 
-__all__ = ["solve_flow", "FlowResult"]
+__all__ = ["solve_flow", "solve_flow_taichi", "FlowResult"]
 
 # Pressure BCs are hardcoded: only the difference matters for Darcy's law,
 # and both u_D and gradP scale with Δρ so they cancel in k = u_D*mu/gradP.
@@ -99,7 +99,7 @@ class FlowResult:
         write_flow_vtr(prefix, self)
 
 
-def solve_flow(
+def solve_flow_taichi(
     im,
     direction="x",
     n_steps=15000,
@@ -113,7 +113,7 @@ def solve_flow(
     tile_size: int | tuple[int, int, int] = 16,
 ):
     """
-    Run a pressure-driven single-phase LBM simulation to steady state.
+    Run a pressure-driven single-phase LBM simulation with Taichi.
 
     Parameters
     ----------
@@ -159,7 +159,8 @@ def solve_flow(
 
     Notes
     -----
-    Taichi must be initialized by the caller before invoking this function:
+    This is the Taichi-specific implementation behind ``solve_flow``. Taichi
+    must be initialized by the caller before invoking this function:
 
         import taichi as ti
         ti.init(arch=ti.cpu)
@@ -234,3 +235,89 @@ def solve_flow(
     result = FlowResult(solver, direction, nu, n_iterations=final_step, convergence_criterion=final_criterion)
 
     return result
+
+
+def solve_flow(
+    im,
+    direction="x",
+    n_steps=15000,
+    nu=1.0 / 6.0,
+    log_every=500,
+    verbose=True,
+    sparse=_DEFAULT_SPARSE,
+    tol=1e-3,
+    *,
+    storage: Literal["dense", "tiled", "sparse"] = _DEFAULT_STORAGE,
+    tile_size: int | tuple[int, int, int] = 16,
+    backend: Literal["taichi", "xlb"] = "taichi",
+    compute_backend: Literal["jax", "warp"] = "jax",
+):
+    """Run a pressure-driven single-phase LBM simulation to steady state.
+
+    Parameters are shared by both solver implementations unless noted below.
+    The default ``backend='taichi'`` preserves the behaviour of earlier
+    releases. Set ``backend='xlb'`` to use the XLB implementation.
+
+    Parameters
+    ----------
+    backend : {'taichi', 'xlb'}, keyword-only
+        Solver implementation. Default ``'taichi'``.
+    compute_backend : {'jax', 'warp'}, keyword-only
+        XLB compute backend. Ignored by the Taichi implementation. Default
+        ``'jax'``.
+    sparse, storage, tile_size
+        Taichi storage settings. XLB does not currently implement these
+        layouts, so non-default values are rejected with ``backend='xlb'``.
+
+    Returns
+    -------
+    FlowResult
+        The converged density and velocity fields, compatible with
+        ``compute_permeability()`` and ``compute_hydraulic_conductance()``.
+    """
+    try:
+        backend_key = backend.lower()
+    except AttributeError as exc:
+        raise ValueError(
+            f"backend must be 'taichi' or 'xlb', got {backend!r}"
+        ) from exc
+
+    if backend_key == "taichi":
+        return solve_flow_taichi(
+            im,
+            direction=direction,
+            n_steps=n_steps,
+            nu=nu,
+            log_every=log_every,
+            verbose=verbose,
+            sparse=sparse,
+            tol=tol,
+            storage=storage,
+            tile_size=tile_size,
+        )
+
+    if backend_key == "xlb":
+        if (
+            sparse != _DEFAULT_SPARSE
+            or storage != _DEFAULT_STORAGE
+            or tile_size != 16
+        ):
+            raise ValueError(
+                "sparse, storage, and tile_size are only supported with "
+                "backend='taichi'"
+            )
+
+        from ._solve_flow_xlb import solve_flow_xlb
+
+        return solve_flow_xlb(
+            im,
+            direction=direction,
+            n_steps=n_steps,
+            nu=nu,
+            log_every=log_every,
+            verbose=verbose,
+            tol=tol,
+            compute_backend=compute_backend,
+        )
+
+    raise ValueError(f"backend must be 'taichi' or 'xlb', got {backend!r}")

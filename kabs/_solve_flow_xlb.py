@@ -31,9 +31,10 @@ def solve_flow_xlb(
     """
     Run a pressure-driven single-phase LBM simulation using the XLB library.
 
-    This function is the XLB-based equivalent of ``solve_flow()``.  It returns
-    the same ``FlowResult`` object and is fully compatible with the downstream
-    ``compute_permeability()`` and ``compute_hydraulic_conductance()`` functions.
+    This is the XLB-specific implementation used by
+    ``solve_flow(backend='xlb')``. It returns the same ``FlowResult`` object
+    and is fully compatible with the downstream ``compute_permeability()`` and
+    ``compute_hydraulic_conductance()`` functions.
 
     Parameters
     ----------
@@ -74,14 +75,14 @@ def solve_flow_xlb(
     **Collision model**: this solver uses the BGK (single relaxation time)
     operator.  BGK is appropriate for Stokes-regime (low Reynolds number)
     porous-media flow and produces physically equivalent results to the MRT
-    operator used by ``solve_flow()`` in that regime.  If you suspect
-    inertial effects (higher flow rates, large pores), prefer ``solve_flow()``
-    which uses MRT.
+    operator used by ``solve_flow_taichi()`` in that regime. If you suspect
+    inertial effects (higher flow rates, large pores), prefer
+    ``solve_flow(backend='taichi')``, which uses MRT.
 
     **Boundary conditions**: inlet and outlet faces receive an equilibrium
-    pressure (density) BC with ρ_in = 1.00 and ρ_out = 0.99, matching
-    ``solve_flow()``.  Unassigned transverse faces are automatically periodic
-    (XLB's streaming operator wraps around by default).
+    pressure (density) BC with ρ_in = 1.00 and ρ_out = 0.99, matching the
+    Taichi implementation. Unassigned transverse faces are automatically
+    periodic (XLB's streaming operator wraps around by default).
 
     **JIT compilation**: JAX will compile the stepper on the first call.
     Expect an additional overhead of 10–60 s on the first invocation.
@@ -92,9 +93,8 @@ def solve_flow_xlb(
 
     **Installation**::
 
-        pip install xlb                  # CPU-only
-        pip install "xlb[cuda]"          # NVIDIA GPU via JAX
-        pip install "xlb[warp]"          # NVIDIA Warp (single GPU)
+        pip install "xlb>=0.3.1" "warp-lang==1.10.0"  # CPU/JAX
+        pip install "xlb[cuda]>=0.3.1" "warp-lang==1.10.0"  # NVIDIA GPU via JAX
     """
     try:
         import xlb
@@ -106,10 +106,8 @@ def solve_flow_xlb(
         from xlb.operator.macroscopic import Macroscopic
     except ImportError as exc:
         raise ImportError(
-            "XLB is required for solve_flow_xlb.  Install it with:\n"
-            "    pip install xlb                  # CPU-only\n"
-            "    pip install 'xlb[cuda]'          # NVIDIA GPU via JAX\n"
-            "    pip install 'xlb[warp]'          # NVIDIA Warp (single GPU)\n"
+            "XLB is required for solve_flow_xlb. Install compatible dependencies with:\n"
+            "    pip install 'xlb>=0.3.1' 'warp-lang==1.10.0'\n"
         ) from exc
 
     direction = direction.lower()

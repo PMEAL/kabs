@@ -75,7 +75,7 @@ class TestSolveFlowXlbSmoke:
     @classmethod
     def setup_class(cls):
         cls.im = _tiny_image()
-        cls.result = solve_flow_xlb(cls.im, **_TINY_KW)
+        cls.result = solve_flow(cls.im, backend="xlb", **_TINY_KW)
 
     def test_returns_flow_result(self):
         from kabs._solve_flow import FlowResult
@@ -145,6 +145,10 @@ class TestSolveFlowXlbSmoke:
     def test_invalid_backend_raises(self):
         with pytest.raises(ValueError, match="compute_backend"):
             solve_flow_xlb(self.im, compute_backend="cuda_nope")
+
+    def test_xlb_rejects_taichi_storage_options(self):
+        with pytest.raises(ValueError, match="only supported with backend='taichi'"):
+            solve_flow(self.im, backend="xlb", storage="tiled")
 
 
 # ---------------------------------------------------------------------------

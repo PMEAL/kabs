@@ -38,6 +38,8 @@ quartodoc:
       desc: "Solve flow and compute transport properties"
       contents:
         - solve_flow
+        - solve_flow_taichi
+        - solve_flow_xlb
         - compute_permeability
         - compute_hydraulic_conductance
         - FlowResult

@@ -176,11 +176,13 @@ def solve_flow_taichi(
     # Public convention: 1=pore, 0=solid (PoreSpy-compatible).
     # SinglePhaseSolver uses the opposite, so flip here.
     solid_im = (im == 0).astype(np.int8)
+    enable_convergence_monitor = log_every != 0 and n_steps >= abs(log_every)
     solver = SinglePhaseSolver(
         solid_im,
         sparse_storage=sparse,
         storage=storage,
         tile_size=tile_size,
+        _enable_convergence_monitor=enable_convergence_monitor,
     )
     set_inlet, set_outlet = _BC_SETTERS[direction]
     getattr(solver, set_inlet)(_RHO_IN)
@@ -190,7 +192,7 @@ def solve_flow_taichi(
 
     time_init = time.time()
     time_pre = time_init
-    v_prev = None
+    has_velocity_snapshot = False
     final_step = n_steps
     final_criterion = None
 
@@ -213,23 +215,27 @@ def solve_flow_taichi(
                     f"elapsed {h_e:02d}h{m_e:02d}m{s_e:02d}s"
                 )
 
-            v_now = solver.get_velocity()
-            if v_prev is not None:
-                v_total = np.sum(np.abs(v_now))
-                v_change = np.sum(np.abs(v_now - v_prev))
-                if v_total > 0:
-                    final_criterion = v_change / v_total
-                if verbose:
-                    print(f"         |v|={v_total:.4e}  delta|v|={v_change:.4e}")
-                if tol is not None and v_total > 0 and final_criterion < tol:
+            if enable_convergence_monitor:
+                if has_velocity_snapshot:
+                    solver.reset_convergence_sums()
+                    solver.accumulate_convergence_sums()
+                    v_total, v_change = solver.get_convergence_sums()
+                    if v_total > 0:
+                        final_criterion = v_change / v_total
                     if verbose:
                         print(
-                            f"Converged at step {i} "
-                            f"(delta|v|/|v| = {final_criterion:.2e} < tol={tol:.2e})"
+                            f"         |v|={v_total:.4e}  delta|v|={v_change:.4e}"
                         )
-                    final_step = i
-                    break
-            v_prev = v_now
+                    if tol is not None and v_total > 0 and final_criterion < tol:
+                        if verbose:
+                            print(
+                                f"Converged at step {i} "
+                                f"(delta|v|/|v| = {final_criterion:.2e} < tol={tol:.2e})"
+                            )
+                        final_step = i
+                        break
+                solver.snapshot_velocity()
+                has_velocity_snapshot = True
             time_pre = time_now
 
     result = FlowResult(solver, direction, nu, n_iterations=final_step, convergence_criterion=final_criterion)

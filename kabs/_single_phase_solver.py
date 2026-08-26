@@ -73,7 +73,7 @@ def _normalize_tile_size(tile_size):
     return tile_size
 
 
-def _create_tiled_population_fields(shape, tile_size):
+def _create_tiled_population_fields(shape, tile_size, convergence_monitor=False):
     """Create unactivated pointer-backed D3Q19 fields for a logical shape."""
     nx, ny, nz = shape
     tx, ty, tz = tile_size
@@ -81,6 +81,9 @@ def _create_tiled_population_fields(shape, tile_size):
     F = ti.Vector.field(19, ti.f32)
     rho = ti.field(ti.f32)
     v = ti.Vector.field(3, ti.f32)
+    v_previous = (
+        ti.Vector.field(3, ti.f32) if convergence_monitor else None
+    )
     blocks = ti.root.pointer(
         ti.ijk,
         (
@@ -90,8 +93,11 @@ def _create_tiled_population_fields(shape, tile_size):
         ),
     )
     cells = blocks.dense(ti.ijk, tile_size)
-    cells.place(rho, v, f, F)
-    return rho, v, f, F, blocks, cells
+    if convergence_monitor:
+        cells.place(rho, v, v_previous, f, F)
+    else:
+        cells.place(rho, v, f, F)
+    return rho, v, v_previous, f, F, blocks, cells
 
 
 @ti.data_oriented
@@ -103,6 +109,7 @@ class SinglePhaseSolver:
         *,
         storage: Literal["dense", "tiled", "sparse"] = _DEFAULT_STORAGE,
         tile_size: int | tuple[int, int, int] = 16,
+        _enable_convergence_monitor: bool = False,
     ):
         """Create a solver using dense, fully tiled, or pore-tile storage.
 
@@ -113,6 +120,7 @@ class SinglePhaseSolver:
         self.storage = _normalize_storage(storage, sparse_storage)
         self.sparse_storage = self.storage == "sparse"
         self.tile_size = _normalize_tile_size(tile_size)
+        self._enable_convergence_monitor = _enable_convergence_monitor
         object.__setattr__(self, "_last_vtr", None)
 
         nx, ny, nz = im.shape
@@ -125,6 +133,11 @@ class SinglePhaseSolver:
         self.fz = 0.0
         self.niu = 0.16667
         self.max_v = ti.field(ti.f32, shape=())
+        self.convergence_v_total = None
+        self.convergence_v_change = None
+        if self._enable_convergence_monitor:
+            self.convergence_v_total = ti.field(ti.f32, shape=())
+            self.convergence_v_change = ti.field(ti.f32, shape=())
 
         # Boundary condition mode:
         # 0 = periodic
@@ -184,10 +197,16 @@ class SinglePhaseSolver:
             )
             self.rho = ti.field(ti.f32, shape=(nx, ny, nz))
             self.v = ti.Vector.field(3, ti.f32, shape=(nx, ny, nz))
+            self.v_previous = None
+            if self._enable_convergence_monitor:
+                self.v_previous = ti.Vector.field(
+                    3, ti.f32, shape=(nx, ny, nz)
+                )
         else:
             (
                 self.rho,
                 self.v,
+                self.v_previous,
                 self.f,
                 self.F,
                 self._population_blocks,
@@ -195,6 +214,7 @@ class SinglePhaseSolver:
             ) = _create_tiled_population_fields(
                 (nx, ny, nz),
                 self.tile_size,
+                self._enable_convergence_monitor,
             )
 
         self.e = ti.Vector.field(3, ti.i32, shape=(19))
@@ -600,6 +620,44 @@ class SinglePhaseSolver:
         for idx in ti.grouped(self.rho):
             if idx.x < self.nx and idx.y < self.ny and idx.z < self.nz:
                 ti.atomic_max(self.max_v[None], self.v[idx].norm())
+
+    @ti.kernel
+    def reset_convergence_sums(self):
+        """Reset the device-side convergence reduction totals."""
+        self.convergence_v_total[None] = 0.0
+        self.convergence_v_change[None] = 0.0
+
+    @ti.kernel
+    def accumulate_convergence_sums(self):
+        """Accumulate velocity magnitude and snapshot change on the device."""
+        for idx in ti.grouped(self.v):
+            if idx.x < self.nx and idx.y < self.ny and idx.z < self.nz:
+                for component in ti.static(range(3)):
+                    ti.atomic_add(
+                        self.convergence_v_total[None],
+                        ti.abs(self.v[idx][component]),
+                    )
+                    ti.atomic_add(
+                        self.convergence_v_change[None],
+                        ti.abs(
+                            self.v[idx][component]
+                            - self.v_previous[idx][component]
+                        ),
+                    )
+
+    @ti.kernel
+    def snapshot_velocity(self):
+        """Copy the current velocity into the device-resident snapshot."""
+        for idx in ti.grouped(self.v):
+            if idx.x < self.nx and idx.y < self.ny and idx.z < self.nz:
+                self.v_previous[idx] = self.v[idx]
+
+    def get_convergence_sums(self):
+        """Return the two scalar device-side convergence totals."""
+        return (
+            self.convergence_v_total[None],
+            self.convergence_v_change[None],
+        )
 
     def step(self):
         self.collision()

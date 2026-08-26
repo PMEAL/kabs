@@ -1,5 +1,6 @@
 """High-level entry point: run a single-phase LBM flow simulation using XLB."""
 
+from functools import lru_cache
 import time
 
 import numpy as np
@@ -16,6 +17,32 @@ _FACE_NAMES = {
     "y": ("front", "back"),
     "z": ("bottom", "top"),
 }
+
+
+@lru_cache(maxsize=1)
+def _get_jax_convergence_reducer():
+    """Return a compiled reduction that keeps array-sized work on the device."""
+    import jax
+    import jax.numpy as jnp
+
+    @jax.jit
+    def reduce_velocity_change(current, previous):
+        return jnp.stack(
+            (
+                jnp.sum(jnp.abs(current)),
+                jnp.sum(jnp.abs(current - previous)),
+            )
+        )
+
+    return reduce_velocity_change
+
+
+def _convergence_sums_to_host(current, previous):
+    """Synchronize and transfer the two convergence scalars together."""
+    import jax
+
+    sums = jax.device_get(_get_jax_convergence_reducer()(current, previous))
+    return float(sums[0]), float(sums[1])
 
 
 def solve_flow_xlb(
@@ -100,10 +127,10 @@ def solve_flow_xlb(
         raise ValueError(f"direction must be 'x', 'y', or 'z', got {direction!r}")
     direction = direction.lower()
 
-    if (
-        not isinstance(compute_backend, str)
-        or compute_backend.lower() not in {"jax", "warp"}
-    ):
+    if not isinstance(compute_backend, str) or compute_backend.lower() not in {
+        "jax",
+        "warp",
+    }:
         raise ValueError(
             f"compute_backend must be 'jax' or 'warp', got {compute_backend!r}"
         )
@@ -259,7 +286,8 @@ def solve_flow_xlb(
     # --- Time loop ---
     time_init = time.time()
     time_pre = time_init
-    v_prev = None
+    u_previous = None
+    enable_convergence_monitor = log_every != 0 and n_steps >= abs(log_every)
     final_step = n_steps
     final_criterion = None
 
@@ -283,27 +311,24 @@ def solve_flow_xlb(
                     f"elapsed {h_e:02d}h{m_e:02d}m{s_e:02d}s"
                 )
 
-            # Convergence check: extract velocity on CPU.
-            # rho shape: (1, nx, ny, nz); u shape: (3, nx, ny, nz)
-            _, u_jax = macro(_to_jax_array(f_0))
-            v_now = np.array(u_jax)  # (3, nx, ny, nz)
-
-            if v_prev is not None:
-                v_total = np.sum(np.abs(v_now))
-                v_change = np.sum(np.abs(v_now - v_prev))
-                if v_total > 0:
-                    final_criterion = v_change / v_total
-                if verbose:
-                    print(f"         |v|={v_total:.4e}  delta|v|={v_change:.4e}")
-                if tol is not None and v_total > 0 and final_criterion < tol:
+            if enable_convergence_monitor:
+                # rho shape: (1, nx, ny, nz); u shape: (3, nx, ny, nz)
+                _, u_current = macro(_to_jax_array(f_0))
+                if u_previous is not None:
+                    v_total, v_change = _convergence_sums_to_host(u_current, u_previous)
+                    if v_total > 0:
+                        final_criterion = v_change / v_total
                     if verbose:
-                        print(
-                            f"Converged at step {i} "
-                            f"(delta|v|/|v| = {final_criterion:.2e} < tol={tol:.2e})"
-                        )
-                    final_step = i
-                    break
-            v_prev = v_now
+                        print(f"         |v|={v_total:.4e}  delta|v|={v_change:.4e}")
+                    if tol is not None and v_total > 0 and final_criterion < tol:
+                        if verbose:
+                            print(
+                                f"Converged at step {i} "
+                                f"(delta|v|/|v| = {final_criterion:.2e} < tol={tol:.2e})"
+                            )
+                        final_step = i
+                        break
+                u_previous = u_current
             time_pre = time_now
 
     # --- Extract final fields ---

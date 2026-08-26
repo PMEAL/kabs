@@ -343,6 +343,7 @@ def solve_flow_xlb(
         velocity=vel_np,
         direction=direction,
         nu=nu,
+        collision_model="srt",
     )
     result.n_iterations = final_step
     result.convergence_criterion = final_criterion

@@ -9,6 +9,7 @@ from ._single_phase_solver import (
     SinglePhaseSolver,
     _DEFAULT_SPARSE,
     _DEFAULT_STORAGE,
+    _normalize_collision_model,
 )
 from .utils import write_flow_vtr
 
@@ -48,6 +49,9 @@ class FlowResult:
         Final value of ``delta|v| / |v|`` when the simulation stopped.
         ``None`` if convergence was never checked (e.g. fewer than two
         log intervals elapsed).
+    collision_model : {'mrt', 'srt'} or None
+        Collision operator used by the simulation. ``None`` for imported data
+        that does not include collision metadata.
     """
 
     def __init__(self, solver, direction, nu, n_iterations=None, convergence_criterion=None):
@@ -55,13 +59,22 @@ class FlowResult:
         self.nu = nu
         self.n_iterations = n_iterations
         self.convergence_criterion = convergence_criterion
+        self.collision_model = getattr(solver, "collision_model", None)
         self._solver = solver
         self.solid = solver.solid.to_numpy()
         self.rho = solver.get_rho()
         self.velocity = solver.get_velocity()  # shape (nx, ny, nz, 3)
 
     @classmethod
-    def from_arrays(cls, solid, rho, velocity, direction=None, nu=None):
+    def from_arrays(
+        cls,
+        solid,
+        rho,
+        velocity,
+        direction=None,
+        nu=None,
+        collision_model=None,
+    ):
         """Construct a FlowResult directly from numpy arrays (e.g. read from a VTR file).
 
         Parameters
@@ -76,12 +89,19 @@ class FlowResult:
             Flow direction.  Can be supplied later to ``compute_permeability``.
         nu : float or None
             Kinematic viscosity in lattice units.  Can be supplied later.
+        collision_model : {'mrt', 'srt'} or None
+            Collision operator that produced the arrays, when known.
         """
         obj = object.__new__(cls)
         obj.direction = direction
         obj.nu = nu
         obj.n_iterations = None
         obj.convergence_criterion = None
+        obj.collision_model = (
+            None
+            if collision_model is None
+            else _normalize_collision_model(collision_model)
+        )
         obj._solver = None
         obj.solid = solid
         obj.rho = rho
@@ -111,6 +131,7 @@ def solve_flow_taichi(
     *,
     storage: Literal["dense", "tiled", "sparse"] = _DEFAULT_STORAGE,
     tile_size: int | tuple[int, int, int] = 16,
+    collision_model: Literal["mrt", "srt"] = "mrt",
 ):
     """
     Run a pressure-driven single-phase LBM simulation with Taichi.
@@ -148,6 +169,9 @@ def solve_flow_taichi(
     tile_size : int or tuple of 3 ints, keyword-only
         Dense tile dimensions for tiled and sparse storage.  An integer uses
         the same size along all axes.  Default 16.
+    collision_model : {'mrt', 'srt'}, keyword-only
+        Collision operator. ``'mrt'`` preserves the historical Taichi solver
+        behavior and remains the default. ``'srt'`` selects the BGK operator.
 
     Returns
     -------
@@ -182,6 +206,7 @@ def solve_flow_taichi(
         sparse_storage=sparse,
         storage=storage,
         tile_size=tile_size,
+        collision_model=collision_model,
         _enable_convergence_monitor=enable_convergence_monitor,
     )
     set_inlet, set_outlet = _BC_SETTERS[direction]
@@ -257,6 +282,7 @@ def solve_flow(
     tile_size: int | tuple[int, int, int] = 16,
     backend: Literal["taichi", "xlb"] = "taichi",
     compute_backend: Literal["jax", "warp"] = "jax",
+    collision_model: Literal["mrt", "srt"] | None = None,
 ):
     """Run a pressure-driven single-phase LBM simulation to steady state.
 
@@ -271,6 +297,9 @@ def solve_flow(
     compute_backend : {'jax', 'warp'}, keyword-only
         XLB compute backend. Ignored by the Taichi implementation. Default
         ``'jax'``.
+    collision_model : {'mrt', 'srt'} or None, keyword-only
+        Collision operator. ``None`` selects the backend default: MRT for
+        Taichi and SRT/BGK for XLB. XLB does not support MRT.
     sparse, storage, tile_size
         Taichi storage settings. XLB does not currently implement these
         layouts, so non-default values are rejected with ``backend='xlb'``.
@@ -289,6 +318,9 @@ def solve_flow(
         ) from exc
 
     if backend_key == "taichi":
+        effective_collision_model = (
+            "mrt" if collision_model is None else collision_model
+        )
         return solve_flow_taichi(
             im,
             direction=direction,
@@ -300,9 +332,18 @@ def solve_flow(
             tol=tol,
             storage=storage,
             tile_size=tile_size,
+            collision_model=effective_collision_model,
         )
 
     if backend_key == "xlb":
+        if collision_model is not None:
+            effective_collision_model = _normalize_collision_model(
+                collision_model
+            )
+            if effective_collision_model != "srt":
+                raise ValueError(
+                    "backend='xlb' only supports collision_model='srt'"
+                )
         if (
             sparse != _DEFAULT_SPARSE
             or storage != _DEFAULT_STORAGE

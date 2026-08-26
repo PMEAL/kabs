@@ -29,6 +29,22 @@ _DEFAULT_STORAGE = _DefaultValue("dense")
 _DEFAULT_SPARSE = _DefaultValue(False)
 
 
+def _normalize_collision_model(collision_model):
+    if not isinstance(collision_model, str):
+        raise ValueError(
+            "collision_model must be 'mrt' or 'srt', "
+            f"got {collision_model!r}"
+        )
+
+    collision_model = collision_model.lower()
+    if collision_model not in ("mrt", "srt"):
+        raise ValueError(
+            "collision_model must be 'mrt' or 'srt', "
+            f"got {collision_model!r}"
+        )
+    return collision_model
+
+
 def _normalize_storage(storage, sparse):
     storage_was_given = storage is not _DEFAULT_STORAGE
     sparse_was_given = sparse is not _DEFAULT_SPARSE
@@ -109,6 +125,7 @@ class SinglePhaseSolver:
         *,
         storage: Literal["dense", "tiled", "sparse"] = _DEFAULT_STORAGE,
         tile_size: int | tuple[int, int, int] = 16,
+        collision_model: Literal["mrt", "srt"] = "mrt",
         _enable_convergence_monitor: bool = False,
     ):
         """Create a solver using dense, fully tiled, or pore-tile storage.
@@ -117,6 +134,7 @@ class SinglePhaseSolver:
         should use ``storage`` and ``tile_size``.
         """
         self.enable_projection = True
+        self.collision_model = _normalize_collision_model(collision_model)
         self.storage = _normalize_storage(storage, sparse_storage)
         self.sparse_storage = self.storage == "sparse"
         self.tile_size = _normalize_tile_size(tile_size)
@@ -218,13 +236,17 @@ class SinglePhaseSolver:
             )
 
         self.e = ti.Vector.field(3, ti.i32, shape=(19))
-        self.S_dig = ti.Vector.field(19, ti.f32, shape=())
         self.e_f = ti.Vector.field(3, ti.f32, shape=(19))
         self.w = ti.field(ti.f32, shape=(19))
         self.ext_f = ti.Vector.field(3, ti.f32, shape=())
 
-        self.M = ti.field(ti.f32, (19, 19))
-        self.inv_M = ti.field(ti.f32, (19, 19))
+        self.S_dig = None
+        self.M = None
+        self.inv_M = None
+        if self.collision_model == "mrt":
+            self.S_dig = ti.Vector.field(19, ti.f32, shape=())
+            self.M = ti.field(ti.f32, (19, 19))
+            self.inv_M = ti.field(ti.f32, (19, 19))
 
         M_np = np.array(
             [
@@ -249,13 +271,15 @@ class SinglePhaseSolver:
                 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, -1, -1, 1, -1, 1, 1, -1],
             ]
         )
-        inv_M_np = np.linalg.inv(M_np)
+        inv_M_np = (
+            np.linalg.inv(M_np) if self.collision_model == "mrt" else None
+        )
 
         self.LR = [0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15, 18, 17]
 
-        self.M.from_numpy(M_np.astype(np.float32))
-
-        self.inv_M.from_numpy(inv_M_np.astype(np.float32))
+        if self.collision_model == "mrt":
+            self.M.from_numpy(M_np.astype(np.float32))
+            self.inv_M.from_numpy(inv_M_np.astype(np.float32))
 
         self.x = np.linspace(0, nx, nx)
         self.y = np.linspace(0, ny, ny)
@@ -271,31 +295,33 @@ class SinglePhaseSolver:
 
         self.tau_f = 3.0 * self.niu + 0.5
         self.s_v = 1.0 / self.tau_f
+        self.omega = self.s_v
         self.s_other = 8.0 * (2.0 - self.s_v) / (8.0 - self.s_v)
 
-        self.S_dig[None] = ti.Vector(
-            [
-                0,
-                self.s_v,
-                self.s_v,
-                0,
-                self.s_other,
-                0,
-                self.s_other,
-                0,
-                self.s_other,
-                self.s_v,
-                self.s_v,
-                self.s_v,
-                self.s_v,
-                self.s_v,
-                self.s_v,
-                self.s_v,
-                self.s_other,
-                self.s_other,
-                self.s_other,
-            ]
-        )
+        if self.collision_model == "mrt":
+            self.S_dig[None] = ti.Vector(
+                [
+                    0,
+                    self.s_v,
+                    self.s_v,
+                    0,
+                    self.s_other,
+                    0,
+                    self.s_other,
+                    0,
+                    self.s_other,
+                    self.s_v,
+                    self.s_v,
+                    self.s_v,
+                    self.s_v,
+                    self.s_v,
+                    self.s_v,
+                    self.s_v,
+                    self.s_other,
+                    self.s_other,
+                    self.s_other,
+                ]
+            )
 
         self.ext_f[None][0] = self.fx
         self.ext_f[None][1] = self.fy
@@ -304,7 +330,6 @@ class SinglePhaseSolver:
             self.force_flag = 1
         else:
             self.force_flag = 0
-        ti.static(self.S_dig)
         self.static_init()
         if self.storage == "tiled":
             self.activate_all_tiles()
@@ -422,7 +447,7 @@ class SinglePhaseSolver:
         return f
 
     @ti.kernel
-    def collision(self):
+    def collision_mrt(self):
         for i, j, k in self.rho:
             if (
                 i < self.nx
@@ -459,6 +484,43 @@ class SinglePhaseSolver:
                 for row in ti.static(range(19)):
                     for col in ti.static(range(19)):
                         self.f[i, j, k][row] += self.inv_M[row, col] * m_temp[col]
+
+    @ti.kernel
+    def collision_srt(self):
+        for i, j, k in self.rho:
+            if (
+                i < self.nx
+                and j < self.ny
+                and k < self.nz
+                and self.solid[i, j, k] == 0
+            ):
+                force = self.calc_local_force(i, j, k)
+                for s in ti.static(range(19)):
+                    population = self.F[i, j, k][s]
+                    equilibrium = self.feq(
+                        s, self.rho[i, j, k], self.v[i, j, k]
+                    )
+                    post_collision = population - self.omega * (
+                        population - equilibrium
+                    )
+                    if ti.static(self.force_flag == 1):
+                        force_term = self.w[s] * (
+                            (self.e_f[s] - self.v[i, j, k]).dot(force) / 3.0
+                            + (
+                                self.e_f[s].dot(self.v[i, j, k])
+                                * self.e_f[s].dot(force)
+                            )
+                            / 9.0
+                        )
+                        post_collision += (1.0 - 0.5 * self.omega) * force_term
+                    self.f[i, j, k][s] = post_collision
+
+    def collision(self):
+        """Apply the collision operator selected when the solver was created."""
+        if self.collision_model == "mrt":
+            self.collision_mrt()
+        else:
+            self.collision_srt()
 
     @ti.func
     def periodic_index(self, i):

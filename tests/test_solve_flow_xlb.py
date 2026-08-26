@@ -148,6 +148,9 @@ class TestSolveFlowXlbSmoke:
         out = compute_permeability(self.result, verbose=False)
         assert out["k_lu"] > 0.0
 
+    def test_result_records_srt_collision_model(self):
+        assert self.result.collision_model == "srt"
+
     def test_invalid_direction_raises(self):
         with pytest.raises(ValueError, match="direction"):
             solve_flow_xlb(self.im, direction="w")
@@ -198,6 +201,9 @@ class TestXlbVsTaichi:
     def setup_class(cls):
         im = _bundle_image(direction="x")
         cls.result_ti = solve_flow(im, direction="x", **_SOLVE_KW)
+        cls.result_ti_srt = solve_flow(
+            im, direction="x", collision_model="srt", **_SOLVE_KW
+        )
         cls.result_xlb = solve_flow_xlb(im, direction="x", **_SOLVE_KW)
         cls.k_ana = _k_analytical()
 
@@ -213,6 +219,11 @@ class TestXlbVsTaichi:
         out = compute_permeability(self.result_xlb, verbose=False)
         assert out["k_lu"] == pytest.approx(self.k_ana, rel=0.07)
 
+    def test_taichi_srt_vs_analytical(self):
+        """Taichi SRT must remain within 7 % of Hagen-Poiseuille."""
+        out = compute_permeability(self.result_ti_srt, verbose=False)
+        assert out["k_lu"] == pytest.approx(self.k_ana, rel=0.07)
+
     # --- Mutual agreement ---
 
     def test_permeability_agreement(self):
@@ -220,6 +231,14 @@ class TestXlbVsTaichi:
         k_ti = compute_permeability(self.result_ti, verbose=False)["k_lu"]
         k_xlb = compute_permeability(self.result_xlb, verbose=False)["k_lu"]
         assert k_xlb == pytest.approx(k_ti, rel=0.05)
+
+    def test_bgk_permeability_agreement(self):
+        """Taichi SRT and XLB BGK permeabilities must agree within 5 %."""
+        k_ti_srt = compute_permeability(
+            self.result_ti_srt, verbose=False
+        )["k_lu"]
+        k_xlb = compute_permeability(self.result_xlb, verbose=False)["k_lu"]
+        assert k_xlb == pytest.approx(k_ti_srt, rel=0.05)
 
     def test_darcy_velocity_agreement(self):
         """XLB and Taichi Darcy velocities must agree within 5 %."""

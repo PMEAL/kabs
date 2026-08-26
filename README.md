@@ -88,6 +88,35 @@ backend. On macOS, use `compute_backend="jax"` (the default), which runs on
 CPU with the standard JAX installation. To use Taichi Metal and XLB in the
 same comparison, prefer separate notebook kernels or processes.
 
+### Collision models
+
+The Taichi solver supports MRT and SRT/BGK collision operators:
+
+```python
+# Backwards-compatible default
+result_mrt = solve_flow(im, backend="taichi", collision_model="mrt")
+
+# Faster distribution-space collision
+result_srt = solve_flow(im, backend="taichi", collision_model="srt")
+```
+
+When `collision_model` is omitted, Taichi uses MRT and XLB uses its native
+SRT/BGK operator. XLB does not implement MRT. The effective operator is stored
+as `result.collision_model` and is retained by KABS VTR export/import.
+
+SRT removes the two dense D3Q19 moment transformations. On the Apple M3 CPU
+benchmark it is about 2.2x faster than MRT; the tested Metal workloads are
+effectively tied because that path appears bandwidth-bound. Both models retain
+the same two D3Q19 population buffers, so SRT does not materially reduce
+allocated simulation memory. See [the benchmark methodology and preliminary
+results](https://github.com/PMEAL/kabs/blob/dev/benchmarks/README.md).
+
+At the default viscosity `nu=1/6` (`tau=1`), SRT agrees with the analytical
+bundle-of-tubes permeability within 3% and with MRT within 1%. Unlike the
+configured MRT operator, SRT bounce-back error depends on relaxation time.
+Validate accuracy for the viscosity and geometry used in production rather
+than assuming permeability is independent of `tau` numerically.
+
 ### Physical units
 
 Pass the voxel size `dx_m` (in metres) to `compute_permeability` to get results in
@@ -177,6 +206,10 @@ and are never returned. Tiling removes the Taichi indexing limit, not the memory
 cost: a fully porous 900³ D3Q19 simulation needs well over 100 GB for the two
 distribution fields alone.
 
+Taichi 1.7.4 does not support the pointer SNodes used by `tiled` and `sparse`
+storage on Apple Metal. Use `storage="dense"` with `ti.metal`, or run a
+pointer-backed layout on a supported CPU/CUDA backend.
+
 ## Return values (permeability)
 
 `compute_permeability` returns a dict:
@@ -196,8 +229,9 @@ distribution fields alone.
 
 1. A pressure-driven flow is imposed by fixing density (ρ_in = 1.00, ρ_out = 0.99) on
    opposite faces of the domain along the chosen axis; the other four faces are periodic.
-2. The D3Q19 MRT-LBM collision operator evolves the distribution functions to steady
-   state.  Solid voxels use bounce-back boundary conditions.
+2. A selectable D3Q19 MRT or SRT/BGK collision operator evolves the
+   distribution functions to steady state. MRT remains the Taichi default;
+   solid voxels use bounce-back boundary conditions.
 3. Darcy's law is applied to the converged velocity field:
 
    **K = u_D · μ / |∇P|**

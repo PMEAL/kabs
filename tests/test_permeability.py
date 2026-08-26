@@ -181,6 +181,115 @@ class TestPermeabilityTensor:
 
 
 # ---------------------------------------------------------------------------
+# SRT accuracy, isotropy, storage equivalence, and viscosity stability
+# ---------------------------------------------------------------------------
+
+
+class TestSrtPermeability:
+    """Validate SRT without assuming viscosity-independent bounce-back error.
+
+    SRT/BGK halfway bounce-back has a known relaxation-time dependence. The
+    default tau=1 case is checked against the analytical and MRT references.
+    A wider tau sweep checks stability and convergence, not invariant
+    permeability.
+    """
+
+    @classmethod
+    def setup_class(cls):
+        srt_kwargs = {
+            **_SOLVE_KW_BASE,
+            "collision_model": "srt",
+        }
+        cls.by_direction = {
+            axis: solve_flow(
+                _bundle_image(axis), direction=axis, **srt_kwargs
+            )
+            for axis in ("x", "y", "z")
+        }
+        cls.k_by_direction = {
+            axis: compute_permeability(result, verbose=False)["k_lu"]
+            for axis, result in cls.by_direction.items()
+        }
+
+        cls.mrt = solve_flow(
+            _bundle_image(), direction="x", **_SOLVE_KW_BASE
+        )
+
+        cls.by_storage = {"dense": cls.by_direction["x"]}
+        cls.by_storage.update(
+            {
+                storage: solve_flow(
+                    _bundle_image(),
+                    direction="x",
+                    storage=storage,
+                    tile_size=8,
+                    **srt_kwargs,
+                )
+                for storage in ("tiled", "sparse")
+            }
+        )
+
+        cls.by_nu = {_NU: cls.by_direction["x"]}
+        cls.by_nu.update(
+            {
+                nu: solve_flow(
+                    _bundle_image(),
+                    direction="x",
+                    nu=nu,
+                    n_steps=4000,
+                    tol=1e-3,
+                    log_every=200,
+                    verbose=False,
+                    collision_model="srt",
+                )
+                for nu in (1.0 / 12.0, 1.0 / 3.0)
+            }
+        )
+
+    @pytest.mark.parametrize("direction", ["x", "y", "z"])
+    def test_default_viscosity_matches_analytical(self, direction):
+        assert self.k_by_direction[direction] == pytest.approx(
+            _k_analytical(), rel=0.07
+        )
+
+    def test_default_viscosity_agrees_with_mrt(self):
+        k_mrt = compute_permeability(self.mrt, verbose=False)["k_lu"]
+        assert self.k_by_direction["x"] == pytest.approx(k_mrt, rel=0.01)
+
+    def test_all_directions_agree(self):
+        assert self.k_by_direction["y"] == pytest.approx(
+            self.k_by_direction["x"], rel=1e-3
+        )
+        assert self.k_by_direction["z"] == pytest.approx(
+            self.k_by_direction["x"], rel=1e-3
+        )
+
+    @pytest.mark.parametrize("storage", ["tiled", "sparse"])
+    def test_storage_layout_matches_dense(self, storage):
+        k_dense = compute_permeability(
+            self.by_storage["dense"], verbose=False
+        )["k_lu"]
+        k_storage = compute_permeability(
+            self.by_storage[storage], verbose=False
+        )["k_lu"]
+        assert k_storage == pytest.approx(k_dense, rel=1e-3)
+
+    @pytest.mark.parametrize("nu", [1.0 / 12.0, _NU, 1.0 / 3.0])
+    def test_viscosity_sweep_is_stable_and_converges(self, nu):
+        result = self.by_nu[nu]
+        permeability = compute_permeability(result, verbose=False)["k_lu"]
+
+        assert result.collision_model == "srt"
+        assert np.isfinite(result.rho).all()
+        assert np.isfinite(result.velocity).all()
+        assert 0.98 < float(result.rho.min())
+        assert float(result.rho.max()) < 1.02
+        assert permeability > 0.0
+        assert result.n_iterations < 4000
+        assert result.convergence_criterion < 1e-3
+
+
+# ---------------------------------------------------------------------------
 # Sparse storage: results must match the dense solver
 # ---------------------------------------------------------------------------
 

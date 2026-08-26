@@ -148,6 +148,9 @@ class TestSolveFlowXlbSmoke:
         out = compute_permeability(self.result, verbose=False)
         assert out["k_lu"] > 0.0
 
+    def test_result_records_srt_collision_model(self):
+        assert self.result.collision_model == "srt"
+
     def test_invalid_direction_raises(self):
         with pytest.raises(ValueError, match="direction"):
             solve_flow_xlb(self.im, direction="w")

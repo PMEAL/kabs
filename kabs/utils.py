@@ -67,26 +67,30 @@ _META_RE = re.compile(r"<!--\s*kabs-meta\s+(.*?)\s*-->", re.DOTALL)
 
 
 def _parse_meta_comment(xml_header):
-    """Extract direction and nu from a kabs-meta comment, if present."""
+    """Extract simulation metadata from a kabs-meta comment, if present."""
     m = _META_RE.search(xml_header)
     if not m:
-        return None, None
+        return None, None, None
     body = m.group(1)
-    direction = nu = None
+    direction = nu = collision_model = None
     dm = re.search(r'direction="([xyz])"', body)
     nm = re.search(r'nu="([^"]+)"', body)
+    cm = re.search(r'collision_model="(mrt|srt)"', body)
     if dm:
         direction = dm.group(1)
     if nm:
         nu = float(nm.group(1))
-    return direction, nu
+    if cm:
+        collision_model = cm.group(1)
+    return direction, nu, collision_model
 
 
 def read_flow_vtr(vtr_file, verbose=False):
     """Read a flow .vtr file and return a :class:`~kabs.FlowResult`.
 
-    ``direction`` and ``nu`` are restored from the file when the file was
-    written by :func:`write_flow_vtr` with a ``FlowResult`` that carried them.
+    ``direction``, ``nu``, and ``collision_model`` are restored from the file
+    when it was written by :func:`write_flow_vtr` with a ``FlowResult`` that
+    carried them.
     """
     from kabs._solve_flow import FlowResult
 
@@ -110,10 +114,17 @@ def read_flow_vtr(vtr_file, verbose=False):
     solid = read_array(raw, binary_start, arrays, "Solid", nx, ny, nz)
     rho = read_array(raw, binary_start, arrays, "rho", nx, ny, nz)
     velocity = read_array(raw, binary_start, arrays, "velocity", nx, ny, nz)
-    direction, nu = _parse_meta_comment(xml_header)
+    direction, nu, collision_model = _parse_meta_comment(xml_header)
     if verbose:
         print("  Arrays loaded.")
-    return FlowResult.from_arrays(solid, rho, velocity, direction=direction, nu=nu)
+    return FlowResult.from_arrays(
+        solid,
+        rho,
+        velocity,
+        direction=direction,
+        nu=nu,
+        collision_model=collision_model,
+    )
 
 
 def write_flow_vtr(path, result):
@@ -125,7 +136,7 @@ def write_flow_vtr(path, result):
         Output path without extension (pyevtk appends ``.vtr``).
     result : FlowResult
         A converged flow result containing ``solid``, ``rho``, and ``velocity``.
-        ``direction`` and ``nu`` are embedded as a metadata comment when present.
+        Simulation provenance is embedded as a metadata comment when present.
     """
     from pyevtk.hl import gridToVTK
 
@@ -149,16 +160,19 @@ def write_flow_vtr(path, result):
         },
     )
 
-    # Embed direction and nu as a comment in the XML header so they survive
+    # Embed simulation metadata as a comment in the XML header so it survives
     # the write/read round-trip.
     direction = getattr(result, "direction", None)
     nu = getattr(result, "nu", None)
-    if direction is not None or nu is not None:
+    collision_model = getattr(result, "collision_model", None)
+    if direction is not None or nu is not None or collision_model is not None:
         attrs = []
         if direction is not None:
             attrs.append(f'direction="{direction}"')
         if nu is not None:
             attrs.append(f'nu="{nu}"')
+        if collision_model is not None:
+            attrs.append(f'collision_model="{collision_model}"')
         comment = f"<!-- kabs-meta {' '.join(attrs)} -->\n".encode()
         vtr_path = path + ".vtr"
         with open(vtr_path, "rb") as fh:

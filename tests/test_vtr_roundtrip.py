@@ -49,6 +49,7 @@ class TestVtrRoundtrip:
         soln = read_flow_vtr(prefix + ".vtr")
         assert soln.direction is None
         assert soln.nu is None
+        assert soln.collision_model is None
 
     # -----------------------------------------------------------------------
     # Round-trip: write then read
@@ -121,6 +122,19 @@ class TestVtrRoundtrip:
         write_flow_vtr(prefix, result)
         soln = read_flow_vtr(prefix + ".vtr")
         assert soln.nu == pytest.approx(nu)
+
+    @pytest.mark.parametrize("collision_model", ["mrt", "srt"])
+    def test_roundtrip_collision_model(self, collision_model):
+        result = FlowResult.from_arrays(
+            solid=np.zeros((4, 4, 4), dtype=np.int8),
+            rho=np.ones((4, 4, 4), dtype=np.float32),
+            velocity=np.zeros((4, 4, 4, 3), dtype=np.float32),
+            collision_model=collision_model,
+        )
+        prefix = self._prefix()
+        write_flow_vtr(prefix, result)
+        soln = read_flow_vtr(prefix + ".vtr")
+        assert soln.collision_model == collision_model
 
     # -----------------------------------------------------------------------
     # Velocity component ordering

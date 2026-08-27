@@ -49,25 +49,62 @@ The following pieces are already present:
 - XLB population-field allocation and buffer swapping.
 - Common `FlowResult` and permeability post-processing interfaces.
 
-The core XLB timestep is therefore present. The unfinished work is primarily
-KABS integration, result extraction, convergence monitoring, runtime
-isolation, validation, and benchmarking.
+The core XLB timestep and KABS integration are now present. On the Windows
+GTX development machine, KABS has native Warp result extraction, device-side
+velocity convergence measurements, lazy Taichi imports, and an isolated CUDA
+numerical validation suite. The remaining work is synchronized benchmarking,
+setup-scalability measurement, RunPod validation, and PoreStore integration.
+
+### Windows validation checkpoint (2026-08-27)
+
+Verified environment:
+
+- NVIDIA GeForce GTX 1660 Ti Max-Q, 6 GiB VRAM, compute capability `sm_75`.
+- NVIDIA driver 538.92, reporting CUDA 12.2 support.
+- Python 3.12.5, XLB 0.3.1, Warp 1.10.0, Taichi 1.7.4.
+- Warp's bundled CUDA toolkit is 12.8 and `cuda:0` is the preferred device.
+
+Completed implementation and validation:
+
+- Native XLB Warp `Macroscopic` reconstruction into Warp grid fields.
+- Explicit synchronization followed by direct Warp-to-NumPy final extraction.
+- No `warp_array_to_jax` or JAX macroscopic operator in the Warp path.
+- A KABS-owned Warp reduction retaining the previous velocity field on-device
+  and transferring only two FP32 convergence scalars per comparison.
+- Backend-neutral `FlowResult` and lazy package/Taichi solver imports.
+- Fresh-process CUDA validation for all flow directions, pressure-face edges
+  and corners, an internal obstacle, analytical permeability, Taichi SRT
+  agreement, XLB/JAX agreement, and fixed-step versus early convergence.
+
+Representative four-cylinder results:
+
+- analytical permeability: 6.28319 lu^2;
+- XLB Warp: 6.40577 lu^2 (1.95% analytical error);
+- Taichi SRT/CUDA: 6.44774 lu^2 (0.65% difference from Warp);
+- XLB/JAX: 6.40505 lu^2 (0.011% difference from Warp);
+- all three implementations stopped at step 1000 for the validation case.
+
+Merge-gate results:
+
+- ordinary suite: 180 passed, 16 CUDA-only tests skipped;
+- CUDA-specific suite: 26 passed;
+- all files changed for the Warp work pass Ruff.
 
 ## Confirmed blockers and risks
 
-### 1. The installed XLB release cannot complete result extraction
+### 1. Native result extraction (resolved in KABS)
 
-KABS currently imports `warp_array_to_jax` from `xlb.utils`. That helper is
+KABS previously imported `warp_array_to_jax` from `xlb.utils`. That helper is
 not included in the installed `xlb==0.3.1` wheel, although a version exists on
-XLB's current development branch. Consequently, the pinned dependency set
-cannot return a `FlowResult` from a Warp solve.
+XLB's current development branch. Consequently, the old implementation could
+not return a `FlowResult` from a Warp solve with the pinned dependency set.
 
-The correct fix is not to depend on this conversion. XLB already provides a
-native Warp `Macroscopic` operator. KABS should allocate Warp density and
-velocity output arrays, invoke that operator, synchronize, and copy only the
-final fields to NumPy.
+KABS no longer depends on this conversion. It allocates Warp density and
+velocity fields through XLB's public grid API, invokes the native Warp
+`Macroscopic` operator, synchronizes, and copies final fields directly to
+NumPy.
 
-### 2. Macroscopic reconstruction currently switches back to JAX
+### 2. Warp-native macroscopic reconstruction (resolved)
 
 KABS constructs `Macroscopic` with `ComputeBackend.JAX`, even when the
 timestep backend is Warp. At each convergence interval it attempts this path:
@@ -76,12 +113,11 @@ timestep backend is Warp. At each convergence interval it attempts this path:
 Warp populations -> JAX array -> JAX macroscopic operator -> host scalars
 ```
 
-This introduces cross-framework synchronization and prevents the solve from
-being Warp-native. The Warp path must instead construct `Macroscopic` with
-`ComputeBackend.WARP` and supply the preallocated `rho` and `u` arrays its
-public API expects.
+The Warp path now constructs `Macroscopic` with `ComputeBackend.WARP` and
+supplies preallocated `rho` and `u` fields. No JAX array or JAX macroscopic
+operator is used after selecting Warp.
 
-### 3. Convergence monitoring is JAX-only
+### 3. Device-side convergence monitoring (resolved for velocity metrics)
 
 The current convergence reducer is implemented with `jax.jit` and
 `jax.device_get`. A finished Warp backend needs either:
@@ -91,14 +127,15 @@ The current convergence reducer is implemented with `jax.jit` and
 2. as an initial correctness implementation, a synchronized velocity copy at
    each relatively infrequent convergence interval.
 
-The first option is preferable for production. The second can be useful for
-bringing up and validating the backend without modifying XLB internals.
+KABS implements the first option. The reduction and snapshot mechanism is
+separated from the stopping policy so future permeability-change metrics can
+be added without coupling their calculation to the current velocity rule.
 
-### 4. Taichi and Warp may conflict when initialized in one process
+### 4. Runtime isolation (Taichi import resolved; XLB state risk remains)
 
 A minimal Warp smoke run on macOS aborted in LLVM initialization after KABS
-had imported Taichi. KABS currently imports the Taichi solver eagerly, even
-when only the XLB backend is requested.
+had imported Taichi. KABS previously imported the Taichi solver eagerly, even
+when only the XLB backend was requested.
 
 This may be platform-specific, but it must be checked on Windows and Linux
 CUDA. The robust KABS-side solution is lazy backend importing:
@@ -107,15 +144,27 @@ CUDA. The robust KABS-side solution is lazy backend importing:
 - Import `SinglePhaseSolver` only when the Taichi backend is selected.
 - Avoid importing `_single_phase_solver` eagerly from `kabs.__init__`.
 
-Running Warp in a dedicated subprocess is a fallback if the native runtimes
-cannot safely coexist, but lazy imports are the preferred design.
+KABS now uses backend-neutral result structures and lazy-loads
+`SinglePhaseSolver`; importing KABS or running XLB/Warp does not load Taichi.
 
-### 5. CUDA test coverage is not adequate
+XLB 0.3.1 nevertheless retains process-global operator and boundary state.
+Switching XLB between JAX and Warp, or running differently configured Warp
+boundary cases sequentially in one interpreter, produced invalid results on
+Windows. Numerical validation therefore launches each physical case in a
+fresh subprocess. Production integration must either preserve one stable XLB
+configuration per process or formalize subprocess isolation.
 
-The existing Warp-specific test is skipped unless
-`KABS_TEST_WARP_CUDA=1`. It performs only one step and does not validate
-permeability, boundary behavior, convergence, or agreement with another
-backend. Ordinary GitHub CI does not exercise Warp CUDA.
+### 5. CUDA test coverage (Windows complete; RunPod pending)
+
+CUDA tests remain opt-in with `KABS_TEST_WARP_CUDA=1`. They now validate native
+extraction, device convergence, permeability, boundary behavior, all three
+directions, obstacles, analytical behavior, and agreement with Taichi SRT and
+XLB/JAX. Ordinary GitHub CI still does not exercise Warp CUDA, and the suite
+has not yet run on RunPod/Linux.
+
+A degenerate one-voxel pore channel placed entirely on a pressure-face corner
+became non-finite under XLB/Warp 0.3.1. Normal pressure faces containing
+interior, edge, and corner pore nodes pass in all three directions.
 
 ### 6. No synchronized Warp benchmark exists
 
@@ -206,6 +255,8 @@ and adds another CUDA configuration layer.
 
 ### Issue 1: Establish a CUDA smoke-test environment
 
+Status: complete on the Windows GTX machine; repeat on RunPod.
+
 Goal: prove that the supported packages can compile and launch XLB Warp code
 on the GTX GPU before restructuring KABS.
 
@@ -226,6 +277,8 @@ Acceptance criteria:
 - Any KABS import conflict is reproduced with a small deterministic command.
 
 ### Issue 2: Make the KABS Warp path native end to end
+
+Status: complete.
 
 Goal: return a valid `FlowResult` without converting Warp populations to JAX.
 
@@ -250,6 +303,9 @@ Acceptance criteria:
 
 ### Issue 3: Isolate backend imports
 
+Status: complete for Taichi imports. Fresh-process isolation is still used for
+XLB backend/configuration changes because of XLB 0.3.1 global state.
+
 Goal: ensure selecting XLB/Warp does not initialize Taichi unnecessarily.
 
 Tasks:
@@ -268,6 +324,9 @@ Acceptance criteria:
 - A subprocess Warp smoke test exits successfully on Windows and RunPod.
 
 ### Issue 4: Implement Warp convergence monitoring
+
+Status: complete for the current velocity-change semantics. The implementation
+is structured so permeability-change measurements can be added separately.
 
 Goal: reproduce KABS convergence semantics without JAX and without copying a
 full velocity field at every check.
@@ -292,6 +351,9 @@ Acceptance criteria:
 - `tol=None` still performs no convergence reduction.
 
 ### Issue 5: Add CUDA numerical validation
+
+Status: complete on Windows except for the documented degenerate one-voxel
+corner channel; repeat the suite on RunPod/Linux CUDA.
 
 Goal: establish that Warp produces the expected porous-media physics.
 
@@ -319,6 +381,8 @@ Initial tolerances should match the existing XLB-versus-Taichi tests. Tighten
 them only after observing repeatable CUDA results.
 
 ### Issue 6: Build a reproducible Warp benchmark
+
+Status: not started.
 
 Goal: compare warmed solver performance fairly on the GTX laptop and RunPod.
 
@@ -355,6 +419,8 @@ Compare:
 
 ### Issue 7: Measure setup scalability
 
+Status: not started.
+
 Goal: determine whether Python solid-coordinate construction limits real
 PoreStore images.
 
@@ -378,9 +444,13 @@ $env:KABS_TEST_WARP_CUDA = "1"
 uv run pytest -q tests/test_convergence_xlb.py
 ```
 
-As Warp coverage grows, keep CPU/JAX tests in ordinary CI and mark only tests
-that truly require CUDA. The complete CUDA suite should have a single
-documented command suitable for both the Windows laptop and RunPod.
+Keep CPU/JAX tests in ordinary CI and mark only tests that truly require CUDA.
+The current CUDA-specific merge gate is:
+
+```powershell
+$env:KABS_TEST_WARP_CUDA = "1"
+uv run pytest -q tests/test_backend_import_isolation.py tests/test_convergence_xlb.py tests/test_warp_cuda_validation.py
+```
 
 ## RunPod benchmark record
 
@@ -420,10 +490,12 @@ following are true:
 - PoreStore explicitly records `backend="xlb"`, `compute_backend="warp"`,
   and `collision_model="srt"` with each result.
 
-## Recommended first action on the Windows laptop
+## Recommended next action
 
-Do not begin with KABS refactoring. First run the machine diagnostics and a
-standalone XLB Warp step. Once that succeeds, implement Issue 2 on the
-`finalizing-warp-option` branch: native Warp macroscopic extraction with
-`tol=None`. That provides the shortest route to an end-to-end result and a
-meaningful first comparison with Taichi SRT.
+Merge the validated Warp integration checkpoint into `dev`, then build the
+synchronized benchmark harness on the Windows laptop. Use explicit Warp
+warm-up and synchronization to measure setup/JIT, fixed-step MLUPS, final
+extraction, time-to-convergence, and memory separately. Once the harness is
+stable, run the authoritative production-scale comparison and memory study on
+RunPod/Linux CUDA, followed by setup-scalability measurement and PoreStore
+metadata integration.

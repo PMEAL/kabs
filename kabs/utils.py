@@ -92,7 +92,7 @@ def read_flow_vtr(vtr_file, verbose=False):
     when it was written by :func:`write_flow_vtr` with a ``FlowResult`` that
     carried them.
     """
-    from kabs._solve_flow import FlowResult
+    from ._flow_common import FlowResult
 
     if verbose:
         print(f"Reading {vtr_file} ...")

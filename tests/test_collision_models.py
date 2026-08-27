@@ -107,6 +107,28 @@ def test_equilibrium_is_unchanged_by_collision(collision_model):
     np.testing.assert_allclose(solver.f.to_numpy(), before, rtol=1e-6, atol=1e-7)
 
 
+def test_macroscopic_reconstruction_does_not_copy_populations():
+    solver = _new_solver("srt")
+    index = (0, 0, 0)
+    populations = solver.F.to_numpy()
+    directions = solver.e_f.to_numpy()
+
+    populations[index] += np.linspace(-8e-4, 8e-4, 19, dtype=np.float32)
+    solver.F.from_numpy(populations)
+    collision_output = solver.f.to_numpy().copy()
+
+    expected_rho = populations[index].sum()
+    expected_velocity = directions.T @ populations[index] / expected_rho
+
+    solver.streaming3()
+
+    np.testing.assert_array_equal(solver.f.to_numpy(), collision_output)
+    assert solver.rho.to_numpy()[index] == pytest.approx(expected_rho)
+    np.testing.assert_allclose(
+        solver.v.to_numpy()[index], expected_velocity, rtol=2e-6, atol=2e-7
+    )
+
+
 @pytest.mark.parametrize("storage", ["dense", "tiled", "sparse"])
 def test_srt_step_runs_with_each_storage_layout(storage):
     solid = np.ones((5, 5, 5), dtype=np.int8)

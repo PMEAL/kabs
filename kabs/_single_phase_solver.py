@@ -657,11 +657,11 @@ class SinglePhaseSolver:
                 if self.solid[i] == 0:
                     self.rho[i] = 0
                     self.v[i] = ti.Vector([0, 0, 0])
-                    self.f[i] = self.F[i]
-                    self.rho[i] += self.f[i].sum()
+                    populations = self.F[i]
+                    self.rho[i] += populations.sum()
 
                     for s in ti.static(range(19)):
-                        self.v[i] += self.e_f[s] * self.f[i][s]
+                        self.v[i] += self.e_f[s] * populations[s]
 
                     f = self.calc_local_force(i.x, i.y, i.z)
 

@@ -15,6 +15,51 @@ bc_defs = {
 }
 
 
+_D3Q19_DIRECTIONS = (
+    (0, 0, 0),
+    (1, 0, 0),
+    (-1, 0, 0),
+    (0, 1, 0),
+    (0, -1, 0),
+    (0, 0, 1),
+    (0, 0, -1),
+    (1, 1, 0),
+    (-1, -1, 0),
+    (1, -1, 0),
+    (-1, 1, 0),
+    (1, 0, 1),
+    (-1, 0, -1),
+    (1, 0, -1),
+    (-1, 0, 1),
+    (0, 1, 1),
+    (0, -1, -1),
+    (0, 1, -1),
+    (0, -1, 1),
+)
+
+_D3Q19_OPPOSITE = (
+    0,
+    2,
+    1,
+    4,
+    3,
+    6,
+    5,
+    8,
+    7,
+    10,
+    9,
+    12,
+    11,
+    14,
+    13,
+    16,
+    15,
+    18,
+    17,
+)
+
+
 class _DefaultValue:
     """Sentinel whose repr keeps backwards-compatible signature defaults readable."""
 
@@ -275,7 +320,7 @@ class SinglePhaseSolver:
             np.linalg.inv(M_np) if self.collision_model == "mrt" else None
         )
 
-        self.LR = [0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15, 18, 17]
+        self.LR = list(_D3Q19_OPPOSITE)
 
         if self.collision_model == "mrt":
             self.M.from_numpy(M_np.astype(np.float32))
@@ -549,12 +594,44 @@ class SinglePhaseSolver:
                 and i.z < self.nz
                 and self.solid[i] == 0
             ):
-                for s in ti.static(range(19)):
-                    ip = self.periodic_index(i + self.e[s])
+                x_minus = i.x - 1
+                x_plus = i.x + 1
+                y_minus = i.y - 1
+                y_plus = i.y + 1
+                z_minus = i.z - 1
+                z_plus = i.z + 1
+                if i.x == 0:
+                    x_minus = self.nx - 1
+                if i.x == self.nx - 1:
+                    x_plus = 0
+                if i.y == 0:
+                    y_minus = self.ny - 1
+                if i.y == self.ny - 1:
+                    y_plus = 0
+                if i.z == 0:
+                    z_minus = self.nz - 1
+                if i.z == self.nz - 1:
+                    z_plus = 0
+
+                self.F[i][0] = self.f[i][0]
+                for s in ti.static(range(1, 19)):
+                    ip = i
+                    if ti.static(_D3Q19_DIRECTIONS[s][0] == -1):
+                        ip.x = x_minus
+                    elif ti.static(_D3Q19_DIRECTIONS[s][0] == 1):
+                        ip.x = x_plus
+                    if ti.static(_D3Q19_DIRECTIONS[s][1] == -1):
+                        ip.y = y_minus
+                    elif ti.static(_D3Q19_DIRECTIONS[s][1] == 1):
+                        ip.y = y_plus
+                    if ti.static(_D3Q19_DIRECTIONS[s][2] == -1):
+                        ip.z = z_minus
+                    elif ti.static(_D3Q19_DIRECTIONS[s][2] == 1):
+                        ip.z = z_plus
                     if self.solid[ip] == 0:
                         self.F[ip][s] = self.f[i][s]
                     else:
-                        self.F[i][self.LR[s]] = self.f[i][s]
+                        self.F[i][_D3Q19_OPPOSITE[s]] = self.f[i][s]
 
     @ti.kernel
     def boundary_condition(self):
@@ -657,11 +734,11 @@ class SinglePhaseSolver:
                 if self.solid[i] == 0:
                     self.rho[i] = 0
                     self.v[i] = ti.Vector([0, 0, 0])
-                    self.f[i] = self.F[i]
-                    self.rho[i] += self.f[i].sum()
+                    populations = self.F[i]
+                    self.rho[i] += populations.sum()
 
                     for s in ti.static(range(19)):
-                        self.v[i] += self.e_f[s] * self.f[i][s]
+                        self.v[i] += self.e_f[s] * populations[s]
 
                     f = self.calc_local_force(i.x, i.y, i.z)
 

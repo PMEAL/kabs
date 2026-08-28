@@ -5,7 +5,7 @@ import time
 
 import numpy as np
 
-from ._solve_flow import FlowResult, _RHO_IN, _RHO_OUT
+from ._flow_common import FlowResult, _RHO_IN, _RHO_OUT
 
 
 __all__ = ["solve_flow_xlb"]
@@ -221,11 +221,25 @@ def solve_flow_xlb(
     # Solid BCs: full-way bounce-back throughout the domain.
     # Transverse faces have no explicit BC → streaming wraps around (periodic).
     boundary_conditions = []
+    # XLB 0.3.1's Warp ZouHeBC path calls np.nonzero() on prescribed_value.
+    # NumPy rejects that operation for scalar/0-D values, although scalar
+    # pressure values are part of ZouHeBC's public API.  A one-element array is
+    # an equivalent supported input and avoids the upstream Warp-only bug.
+    rho_in = (
+        np.asarray([_RHO_IN], dtype=np.float64)
+        if _backend is ComputeBackend.WARP
+        else float(_RHO_IN)
+    )
+    rho_out = (
+        np.asarray([_RHO_OUT], dtype=np.float64)
+        if _backend is ComputeBackend.WARP
+        else float(_RHO_OUT)
+    )
     if inlet_indices[0]:
         boundary_conditions.append(
             ZouHeBC(
                 bc_type="pressure",
-                prescribed_value=float(_RHO_IN),
+                prescribed_value=rho_in,
                 indices=inlet_indices,
             )
         )
@@ -233,7 +247,7 @@ def solve_flow_xlb(
         boundary_conditions.append(
             ZouHeBC(
                 bc_type="pressure",
-                prescribed_value=float(_RHO_OUT),
+                prescribed_value=rho_out,
                 indices=outlet_indices,
             )
         )
@@ -254,26 +268,30 @@ def solve_flow_xlb(
         bc_solid = FullwayBounceBackBC(indices=solid_indices)
         boundary_conditions.append(bc_solid)
 
-    # --- Macroscopic operator (always JAX for numpy extraction) ---
-    # For the Warp backend, f arrays are converted to JAX before calling macro.
+    # --- Macroscopic operator ---
     macro = Macroscopic(
-        compute_backend=ComputeBackend.JAX,
+        compute_backend=_backend,
         precision_policy=precision_policy,
-        velocity_set=xlb.velocity_set.D3Q19(
-            precision_policy=precision_policy,
-            compute_backend=ComputeBackend.JAX,
-        ),
+        velocity_set=velocity_set,
     )
 
-    def _to_jax_array(f):
-        """Convert f to a JAX array if it is a Warp array."""
-        import jax.numpy as jnp
+    if _backend is ComputeBackend.WARP:
+        import warp as wp
 
-        if isinstance(f, jnp.ndarray):
-            return f
-        from xlb.utils import warp_array_to_jax
+        from ._warp_convergence import WarpConvergenceMonitor
 
-        return warp_array_to_jax(f)
+        rho_device = grid.create_field(1, dtype=precision_policy.store_precision)
+        u_device = grid.create_field(3, dtype=precision_policy.store_precision)
+        warp_convergence = WarpConvergenceMonitor(u_device)
+
+        def _update_macroscopic(f):
+            macro(f, rho_device, u_device)
+            return rho_device, u_device
+
+    else:
+
+        def _update_macroscopic(f):
+            return macro(f)
 
     # --- Stepper ---
     stepper = IncompressibleNavierStokesStepper(
@@ -287,7 +305,11 @@ def solve_flow_xlb(
     time_init = time.time()
     time_pre = time_init
     u_previous = None
-    enable_convergence_monitor = log_every != 0 and n_steps >= abs(log_every)
+    enable_convergence_monitor = (
+        log_every != 0
+        and n_steps >= abs(log_every)
+        and (_backend is not ComputeBackend.WARP or tol is not None)
+    )
     final_step = n_steps
     final_criterion = None
 
@@ -313,9 +335,26 @@ def solve_flow_xlb(
 
             if enable_convergence_monitor:
                 # rho shape: (1, nx, ny, nz); u shape: (3, nx, ny, nz)
-                _, u_current = macro(_to_jax_array(f_0))
-                if u_previous is not None:
-                    v_total, v_change = _convergence_sums_to_host(u_current, u_previous)
+                _, u_current = _update_macroscopic(f_0)
+                if _backend is ComputeBackend.WARP:
+                    metrics = warp_convergence.sample(u_current)
+                    if metrics is not None:
+                        v_total = metrics.velocity_total
+                        v_change = metrics.velocity_change
+                elif u_previous is not None:
+                    metrics = None
+                    v_total, v_change = _convergence_sums_to_host(
+                        u_current, u_previous
+                    )
+                else:
+                    metrics = None
+
+                has_comparison = (
+                    metrics is not None
+                    if _backend is ComputeBackend.WARP
+                    else u_previous is not None
+                )
+                if has_comparison:
                     if v_total > 0:
                         final_criterion = v_change / v_total
                     if verbose:
@@ -328,14 +367,19 @@ def solve_flow_xlb(
                             )
                         final_step = i
                         break
-                u_previous = u_current
+                if _backend is not ComputeBackend.WARP:
+                    u_previous = u_current
             time_pre = time_now
 
     # --- Extract final fields ---
-    rho_jax, u_jax = macro(_to_jax_array(f_0))
+    rho_field, u_field = _update_macroscopic(f_0)
+    if _backend is ComputeBackend.WARP:
+        wp.synchronize()
+        rho_field = rho_field.numpy()
+        u_field = u_field.numpy()
     # rho: (1, nx, ny, nz) → (nx, ny, nz); u: (3, nx, ny, nz) → (nx, ny, nz, 3)
-    rho_np = np.array(rho_jax[0]).astype(np.float32)
-    vel_np = np.moveaxis(np.array(u_jax), 0, -1).astype(np.float32)
+    rho_np = np.array(rho_field[0]).astype(np.float32)
+    vel_np = np.moveaxis(np.array(u_field), 0, -1).astype(np.float32)
 
     result = FlowResult.from_arrays(
         solid=solid_im,

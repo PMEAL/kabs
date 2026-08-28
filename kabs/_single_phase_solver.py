@@ -2,6 +2,12 @@ import taichi as ti
 import numpy as np
 from typing import Literal
 
+from ._flow_common import (
+    _DEFAULT_SPARSE,
+    _DEFAULT_STORAGE,
+    _normalize_collision_model,
+)
+
 
 __all__ = [
     "SinglePhaseSolver",
@@ -58,36 +64,6 @@ _D3Q19_OPPOSITE = (
     18,
     17,
 )
-
-
-class _DefaultValue:
-    """Sentinel whose repr keeps backwards-compatible signature defaults readable."""
-
-    def __init__(self, value):
-        self.value = value
-
-    def __repr__(self):
-        return repr(self.value)
-
-
-_DEFAULT_STORAGE = _DefaultValue("dense")
-_DEFAULT_SPARSE = _DefaultValue(False)
-
-
-def _normalize_collision_model(collision_model):
-    if not isinstance(collision_model, str):
-        raise ValueError(
-            "collision_model must be 'mrt' or 'srt', "
-            f"got {collision_model!r}"
-        )
-
-    collision_model = collision_model.lower()
-    if collision_model not in ("mrt", "srt"):
-        raise ValueError(
-            "collision_model must be 'mrt' or 'srt', "
-            f"got {collision_model!r}"
-        )
-    return collision_model
 
 
 def _normalize_storage(storage, sparse):

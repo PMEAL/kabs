@@ -170,15 +170,54 @@ def test_single_check_skips_convergence_reduction(monkeypatch):
     os.environ.get("KABS_TEST_WARP_CUDA") != "1",
     reason="set KABS_TEST_WARP_CUDA=1 on a CUDA-enabled Warp test runner",
 )
+def test_warp_velocity_reduction_matches_numpy():
+    import warp as wp
+
+    from kabs._warp_convergence import WarpConvergenceMonitor
+
+    previous = np.arange(3 * 2 * 3 * 4, dtype=np.float32).reshape(3, 2, 3, 4)
+    current_host = previous.copy()
+    current_host[0] += 1.0
+    current_host[1] -= 0.5
+    current = wp.array(previous, dtype=wp.float32, device="cuda:0")
+    monitor = WarpConvergenceMonitor(current)
+
+    assert monitor.sample(current) is None
+    wp.copy(
+        current,
+        wp.array(current_host, dtype=wp.float32, device="cuda:0"),
+    )
+    metrics = monitor.sample(current)
+
+    assert metrics.velocity_total == pytest.approx(
+        np.sum(np.abs(current_host)), rel=2e-6
+    )
+    assert metrics.velocity_change == pytest.approx(
+        np.sum(np.abs(current_host - previous)), rel=2e-6
+    )
+
+
+@pytest.mark.skipif(
+    os.environ.get("KABS_TEST_WARP_CUDA") != "1",
+    reason="set KABS_TEST_WARP_CUDA=1 on a CUDA-enabled Warp test runner",
+)
 def test_warp_backend_uses_device_convergence_path():
     result = solve_flow_xlb(
         _channel(),
         n_steps=1,
         log_every=1,
-        tol=None,
+        tol=0.0,
         verbose=False,
         compute_backend="warp",
     )
 
     assert result.n_iterations == 1
     assert result.convergence_criterion is not None
+    assert result.rho.shape == (6, 6, 6)
+    assert result.velocity.shape == (6, 6, 6, 3)
+    assert result.rho.dtype == np.float32
+    assert result.velocity.dtype == np.float32
+    assert np.isfinite(result.rho).all()
+    assert np.isfinite(result.velocity).all()
+    assert result.collision_model == "srt"
+    assert np.isfinite(compute_permeability(result, verbose=False)["k_lu"])

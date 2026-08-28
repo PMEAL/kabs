@@ -5,118 +5,25 @@ from typing import Literal
 
 import numpy as np
 
-from ._single_phase_solver import (
-    SinglePhaseSolver,
+from ._flow_common import (
+    FlowResult,
     _DEFAULT_SPARSE,
     _DEFAULT_STORAGE,
+    _RHO_IN,
+    _RHO_OUT,
     _normalize_collision_model,
 )
-from .utils import write_flow_vtr
 
 
 __all__ = ["solve_flow", "solve_flow_taichi", "FlowResult"]
 
 # Pressure BCs are hardcoded: only the difference matters for Darcy's law,
 # and both u_D and gradP scale with Δρ so they cancel in k = u_D*mu/gradP.
-_RHO_IN = 1.00
-_RHO_OUT = 0.99
-
 _BC_SETTERS = {
     "x": ("set_bc_rho_x0", "set_bc_rho_x1"),
     "y": ("set_bc_rho_y0", "set_bc_rho_y1"),
     "z": ("set_bc_rho_z0", "set_bc_rho_z1"),
 }
-
-
-class FlowResult:
-    """Container for a converged single-phase LBM flow simulation.
-
-    Attributes
-    ----------
-    solid : np.ndarray, shape (nx, ny, nz), dtype int8
-        Solid mask in internal convention: 1 = solid, 0 = pore.
-    rho : np.ndarray, shape (nx, ny, nz), dtype float32
-        Density field.
-    velocity : np.ndarray, shape (nx, ny, nz, 3), dtype float32
-        Velocity field (vx, vy, vz) at each voxel.
-    direction : str
-        Flow direction used in the simulation ('x', 'y', or 'z').
-    nu : float
-        Kinematic viscosity in lattice units.
-    n_iterations : int or None
-        Number of LBM time steps that were actually executed.
-    convergence_criterion : float or None
-        Final value of ``delta|v| / |v|`` when the simulation stopped.
-        ``None`` if convergence was never checked (e.g. fewer than two
-        log intervals elapsed).
-    collision_model : {'mrt', 'srt'} or None
-        Collision operator used by the simulation. ``None`` for imported data
-        that does not include collision metadata.
-    """
-
-    def __init__(self, solver, direction, nu, n_iterations=None, convergence_criterion=None):
-        self.direction = direction
-        self.nu = nu
-        self.n_iterations = n_iterations
-        self.convergence_criterion = convergence_criterion
-        self.collision_model = getattr(solver, "collision_model", None)
-        self._solver = solver
-        self.solid = solver.solid.to_numpy()
-        self.rho = solver.get_rho()
-        self.velocity = solver.get_velocity()  # shape (nx, ny, nz, 3)
-
-    @classmethod
-    def from_arrays(
-        cls,
-        solid,
-        rho,
-        velocity,
-        direction=None,
-        nu=None,
-        collision_model=None,
-    ):
-        """Construct a FlowResult directly from numpy arrays (e.g. read from a VTR file).
-
-        Parameters
-        ----------
-        solid : np.ndarray, shape (nx, ny, nz), dtype int8
-            Solid mask: 1 = solid, 0 = pore.
-        rho : np.ndarray, shape (nx, ny, nz), dtype float32
-            Density field.
-        velocity : np.ndarray, shape (nx, ny, nz, 3), dtype float32
-            Velocity field.
-        direction : {'x', 'y', 'z'} or None
-            Flow direction.  Can be supplied later to ``compute_permeability``.
-        nu : float or None
-            Kinematic viscosity in lattice units.  Can be supplied later.
-        collision_model : {'mrt', 'srt'} or None
-            Collision operator that produced the arrays, when known.
-        """
-        obj = object.__new__(cls)
-        obj.direction = direction
-        obj.nu = nu
-        obj.n_iterations = None
-        obj.convergence_criterion = None
-        obj.collision_model = (
-            None
-            if collision_model is None
-            else _normalize_collision_model(collision_model)
-        )
-        obj._solver = None
-        obj.solid = solid
-        obj.rho = rho
-        obj.velocity = velocity
-        return obj
-
-    def export_to_vtk(self, prefix):
-        """Write a VTK Rectilinear Grid (.vtr) file.
-
-        Parameters
-        ----------
-        prefix : str
-            Output path without extension (pyevtk appends ``.vtr``).
-        """
-        write_flow_vtr(prefix, self)
 
 
 def solve_flow_taichi(
@@ -193,6 +100,8 @@ def solve_flow_taichi(
     memory cost.  Fully activating a large porous image can still require far
     more memory than the available host or accelerator memory.
     """
+    from ._single_phase_solver import SinglePhaseSolver
+
     direction = direction.lower()
     if direction not in _BC_SETTERS:
         raise ValueError(f"direction must be 'x', 'y', or 'z', got {direction!r}")

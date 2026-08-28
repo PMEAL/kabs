@@ -69,7 +69,7 @@ def test_warp_solve_does_not_import_taichi():
             collision_model="srt",
             n_steps=20,
             log_every=5,
-            tol=None,
+            velocity_tol=None,
             verbose=False,
         )
 
@@ -101,7 +101,7 @@ def test_warp_and_jax_convergence_agree_in_fresh_processes():
             compute_backend={backend!r},
             n_steps=20,
             log_every=5,
-            tol=0.2,
+            velocity_tol=0.2,
             verbose=False,
         )
         print("KABS_RESULT=" + json.dumps({{

@@ -9,7 +9,11 @@ import numpy as np
 import pytest
 
 from kabs import compute_permeability, solve_flow_xlb
-from kabs._solve_flow_xlb import _convergence_sums_to_host
+from kabs._convergence import ConvergenceConfig
+from kabs._solve_flow_xlb import (
+    _convergence_sums_to_host,
+    _get_jax_convergence_reducer,
+)
 
 
 def _channel(shape=(6, 6, 6)):
@@ -70,12 +74,12 @@ def _numpy_convergence_sums(current, previous):
     )
 
 
-def test_xlb_solver_matches_legacy_host_convergence(monkeypatch, capsys):
-    xlb_module = importlib.import_module("kabs._solve_flow_xlb")
+def test_xlb_solver_reports_two_pass_velocity_convergence(capsys):
     kwargs = {
-        "n_steps": 20,
-        "log_every": 5,
-        "tol": 0.2,
+        "n_steps": 4,
+        "log_every": 0,
+        "convergence_every": 1,
+        "velocity_tol": 1e9,
         "verbose": False,
         "compute_backend": "jax",
     }
@@ -83,42 +87,22 @@ def test_xlb_solver_matches_legacy_host_convergence(monkeypatch, capsys):
 
     device = solve_flow_xlb(image, **{**kwargs, "verbose": True})
     output = capsys.readouterr().out
-    assert "|v|=" in output
-    assert "delta|v|=" in output
+    assert "velocity=" in output
+    assert "streak=2" in output
     assert "Converged at step" in output
-    assert "delta|v|/|v|" in output
-    assert "residual" not in output.lower()
-    with monkeypatch.context() as context:
-        context.setattr(
-            xlb_module,
-            "_convergence_sums_to_host",
-            _numpy_convergence_sums,
-        )
-        reference = solve_flow_xlb(image, **kwargs)
-
-    assert device.n_iterations == reference.n_iterations < kwargs["n_steps"]
-    assert device.convergence_criterion == pytest.approx(
-        reference.convergence_criterion, rel=2e-5, abs=2e-7
-    )
-    np.testing.assert_allclose(device.rho, reference.rho, rtol=1e-6, atol=1e-7)
-    np.testing.assert_allclose(
-        device.velocity,
-        reference.velocity,
-        rtol=1e-6,
-        atol=1e-7,
-    )
-    assert compute_permeability(device, verbose=False)["k_lu"] == pytest.approx(
-        compute_permeability(reference, verbose=False)["k_lu"], rel=1e-6
-    )
+    assert device.n_iterations == 3
+    assert device.converged
+    assert device.consecutive_passes == 2
+    assert device.velocity_criterion < device.velocity_tol
 
 
 def test_periodic_checks_do_not_convert_full_velocity_to_numpy(monkeypatch):
     xlb_module = importlib.import_module("kabs._solve_flow_xlb")
     original = np.array
-    original_reduction = xlb_module._convergence_sums_to_host
     full_velocity_conversions = []
-    reduction_calls = 0
+    device_get_shapes = []
     expected_shape = (3, 6, 6, 6)
+    original_device_get = jax.device_get
 
     def tracked_array(value, *args, **kwargs):
         result = original(value, *args, **kwargs)
@@ -126,24 +110,24 @@ def test_periodic_checks_do_not_convert_full_velocity_to_numpy(monkeypatch):
             full_velocity_conversions.append(result.shape)
         return result
 
-    def tracked_reduction(current, previous):
-        nonlocal reduction_calls
-        reduction_calls += 1
-        return original_reduction(current, previous)
+    def tracked_device_get(value):
+        device_get_shapes.append(value.shape)
+        return original_device_get(value)
 
     monkeypatch.setattr(xlb_module.np, "array", tracked_array)
-    monkeypatch.setattr(xlb_module, "_convergence_sums_to_host", tracked_reduction)
+    monkeypatch.setattr(jax, "device_get", tracked_device_get)
 
     result = solve_flow_xlb(
         _channel(),
-        n_steps=10,
-        log_every=5,
-        tol=None,
+        n_steps=3,
+        log_every=0,
+        convergence_every=1,
+        velocity_tol=1e-12,
         verbose=False,
     )
 
     assert result.convergence_criterion is not None
-    assert reduction_calls == 2  # Checks at 5 and 10; step 0 only snapshots.
+    assert device_get_shapes == [(2,), (2,)]
     assert full_velocity_conversions == [expected_shape]
 
 
@@ -153,17 +137,100 @@ def test_single_check_skips_convergence_reduction(monkeypatch):
     def unexpected_reduction(*args):
         raise AssertionError("a single check must not run a convergence reduction")
 
-    monkeypatch.setattr(xlb_module, "_convergence_sums_to_host", unexpected_reduction)
+    monkeypatch.setattr(xlb_module, "_get_jax_convergence_reducer", unexpected_reduction)
     result = solve_flow_xlb(
         _channel(),
-        n_steps=0,
-        log_every=5,
-        tol=None,
+        n_steps=1,
+        log_every=0,
+        convergence_every=1,
+        velocity_tol=1e-3,
         verbose=False,
     )
 
-    assert result.n_iterations == 0
+    assert result.n_iterations == 1
+    assert not result.converged
     assert result.convergence_criterion is None
+
+
+@pytest.mark.parametrize(("direction", "axis"), [("x", 0), ("y", 1), ("z", 2)])
+def test_jax_combined_reduction_matches_masked_numpy(direction, axis):
+    del direction
+    rng = np.random.default_rng(17)
+    shape = (3, 4, 5)
+    current_host = rng.normal(size=(3, *shape)).astype(np.float32)
+    previous_host = rng.normal(size=(3, *shape)).astype(np.float32)
+    rho_host = rng.uniform(0.9, 1.1, size=(1, *shape)).astype(np.float32)
+    pore_host = np.ones(shape, dtype=bool)
+    pore_host[1, 2, 3] = False
+    values = np.asarray(
+        _get_jax_convergence_reducer(True, True, True, axis)(
+            jnp.asarray(rho_host),
+            jnp.asarray(current_host),
+            jnp.asarray(previous_host),
+            jnp.asarray(pore_host[None, ...]),
+        )
+    )
+    directional = current_host[axis]
+    inlet = [slice(None)] * 3
+    outlet = [slice(None)] * 3
+    inlet[axis] = 0
+    outlet[axis] = -1
+    expected = (
+        np.sum(np.abs(current_host) * pore_host[None]),
+        np.sum(np.abs(current_host - previous_host) * pore_host[None]),
+        np.sum(directional * pore_host),
+        np.sum((rho_host[0] * directional * pore_host)[tuple(inlet)]),
+        np.sum((rho_host[0] * directional * pore_host)[tuple(outlet)]),
+    )
+    assert values == pytest.approx(expected, rel=1e-6, abs=1e-6)
+
+
+@pytest.mark.parametrize("axis", [0, 1, 2])
+def test_warp_cpu_combined_reduction_matches_masked_numpy(axis):
+    import warp as wp
+
+    from kabs._warp_convergence import WarpConvergenceMonitor
+
+    rng = np.random.default_rng(23)
+    shape = (3, 4, 5)
+    previous = rng.normal(size=(3, *shape)).astype(np.float32)
+    current_host = rng.normal(size=(3, *shape)).astype(np.float32)
+    rho_host = rng.uniform(0.9, 1.1, size=(1, *shape)).astype(np.float32)
+    pore = np.ones(shape, dtype=bool)
+    pore[1, 2, 3] = False
+    current = wp.array(previous, dtype=wp.float32, device="cpu")
+    rho = wp.array(rho_host, dtype=wp.float32, device="cpu")
+    config = ConvergenceConfig(1, 1.0, 1.0, 1.0)
+    monitor = WarpConvergenceMonitor(current, pore, config, axis)
+    monitor.sample(rho, current)
+    monitor.snapshot_velocity(current)
+    wp.copy(current, wp.array(current_host, dtype=wp.float32, device="cpu"))
+    values = monitor.sample(rho, current)
+
+    directional = current_host[axis]
+    inlet = [slice(None)] * 3
+    outlet = [slice(None)] * 3
+    inlet[axis] = 0
+    outlet[axis] = -1
+    assert values.velocity_total == pytest.approx(
+        np.sum(np.abs(current_host) * pore[None]), rel=2e-6
+    )
+    assert values.velocity_change == pytest.approx(
+        np.sum(np.abs(current_host - previous) * pore[None]), rel=2e-6
+    )
+    assert values.directional_flow == pytest.approx(
+        np.sum(directional * pore), rel=2e-6, abs=2e-6
+    )
+    assert values.inlet_mass_flux == pytest.approx(
+        np.sum((rho_host[0] * directional * pore)[tuple(inlet)]),
+        rel=2e-6,
+        abs=2e-6,
+    )
+    assert values.outlet_mass_flux == pytest.approx(
+        np.sum((rho_host[0] * directional * pore)[tuple(outlet)]),
+        rel=2e-6,
+        abs=2e-6,
+    )
 
 
 @pytest.mark.skipif(
@@ -180,14 +247,19 @@ def test_warp_velocity_reduction_matches_numpy():
     current_host[0] += 1.0
     current_host[1] -= 0.5
     current = wp.array(previous, dtype=wp.float32, device="cuda:0")
-    monitor = WarpConvergenceMonitor(current)
+    rho = wp.ones((1, 2, 3, 4), dtype=wp.float32, device="cuda:0")
+    config = ConvergenceConfig(1, 1e-3, None, None)
+    monitor = WarpConvergenceMonitor(
+        current, np.ones((2, 3, 4), dtype=bool), config, 0
+    )
 
-    assert monitor.sample(current) is None
+    assert monitor.sample(rho, current).velocity_change is None
+    monitor.snapshot_velocity(current)
     wp.copy(
         current,
         wp.array(current_host, dtype=wp.float32, device="cuda:0"),
     )
-    metrics = monitor.sample(current)
+    metrics = monitor.sample(rho, current)
 
     assert metrics.velocity_total == pytest.approx(
         np.sum(np.abs(current_host)), rel=2e-6
@@ -204,14 +276,16 @@ def test_warp_velocity_reduction_matches_numpy():
 def test_warp_backend_uses_device_convergence_path():
     result = solve_flow_xlb(
         _channel(),
-        n_steps=1,
-        log_every=1,
-        tol=0.0,
+        n_steps=3,
+        log_every=0,
+        convergence_every=1,
+        velocity_tol=1e9,
         verbose=False,
         compute_backend="warp",
     )
 
-    assert result.n_iterations == 1
+    assert result.n_iterations == 3
+    assert result.converged
     assert result.convergence_criterion is not None
     assert result.rho.shape == (6, 6, 6)
     assert result.velocity.shape == (6, 6, 6, 3)

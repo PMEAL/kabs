@@ -69,8 +69,9 @@ Completed implementation and validation:
 - Native XLB Warp `Macroscopic` reconstruction into Warp grid fields.
 - Explicit synchronization followed by direct Warp-to-NumPy final extraction.
 - No `warp_array_to_jax` or JAX macroscopic operator in the Warp path.
-- A KABS-owned Warp reduction retaining the previous velocity field on-device
-  and transferring only two FP32 convergence scalars per comparison.
+- A KABS-owned criterion-aware Warp reduction that retains the previous
+  velocity field on-device only when needed and transfers at most five FP32
+  convergence scalars per check.
 - Backend-neutral `FlowResult` and lazy package/Taichi solver imports.
 - Fresh-process CUDA validation for all flow directions, pressure-face edges
   and corners, an internal obstacle, analytical permeability, Taichi SRT
@@ -286,7 +287,7 @@ Tasks:
 
 - Construct XLB `Macroscopic` with `ComputeBackend.WARP`.
 - Allocate `rho` and `u` using the XLB Warp grid/public field API.
-- Run fixed-step solves initially with `tol=None`.
+- Run fixed-step solves initially with `velocity_tol=None`.
 - Invoke the native macroscopic operator after the final step.
 - Call `wp.synchronize()` before host extraction.
 - Convert `rho` and `u` directly to NumPy using Warp's public array API.
@@ -348,7 +349,7 @@ Acceptance criteria:
 - Warp and JAX convergence criteria agree within floating-point tolerance.
 - Warp stops at the same logging interval as the reference implementation.
 - Only scalar-sized host transfers occur during periodic checks.
-- `tol=None` still performs no convergence reduction.
+- `velocity_tol=None` still performs no convergence reduction.
 
 ### Issue 5: Add CUDA numerical validation
 

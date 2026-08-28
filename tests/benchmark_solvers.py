@@ -134,7 +134,7 @@ def benchmark_taichi_model(
         image,
         collision_model=model,
         n_steps=0,
-        tol=None,
+        velocity_tol=None,
         log_every=1,
         verbose=False,
     )
@@ -154,7 +154,7 @@ def benchmark_taichi_model(
         image,
         collision_model=model,
         n_steps=400,
-        tol=None,
+        velocity_tol=None,
         log_every=200,
         verbose=False,
     )

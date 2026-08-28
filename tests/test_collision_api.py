@@ -10,7 +10,7 @@ from kabs import FlowResult, solve_flow, solve_flow_taichi
 _QUICK_SOLVE = {
     "direction": "x",
     "n_steps": 2,
-    "tol": None,
+    "velocity_tol": None,
     "log_every": 10,
     "verbose": False,
 }

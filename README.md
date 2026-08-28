@@ -134,27 +134,56 @@ print(f"k = {results['k_m2']:.4e} m²")
 
 ### Convergence
 
-By default `solve_flow` stops early once the velocity field has converged to within a
-relative tolerance of 1e-3 (i.e. `delta|v| / |v| < 1e-3`).  The actual number of
-steps run is printed and reflected in the auto-generated VTR filename.
+Convergence criteria are composable. Each non-`None` tolerance enables its
+criterion, all enabled criteria must pass together, and two consecutive passing
+checks are required. By default only the componentwise velocity-field change is
+enabled with a relative tolerance of `1e-3`.
 
 ```python
-# Tighten or loosen the tolerance
-result = solve_flow(im, direction="x", tol=1e-4)  # tighter
-result = solve_flow(im, direction="x", tol=1e-2)  # faster, coarser
+# Velocity-only convergence
+result = solve_flow(im, direction="x", velocity_tol=1e-3)
 
-# Disable early stopping and always run n_steps
-result = solve_flow(im, direction="x", n_steps=5000, tol=None)
+# Permeability stability with velocity and mass-conservation safeguards
+result = solve_flow(
+    im,
+    direction="x",
+    velocity_tol=1e-2,
+    k_tol=5e-3,
+    flux_tol=5e-3,
+    convergence_every=500,
+)
+
+# Permeability and flux without allocating a previous-velocity field
+result = solve_flow(
+    im,
+    velocity_tol=None,
+    k_tol=5e-3,
+    flux_tol=5e-3,
+)
+
+# Disable convergence monitoring and run exactly n_steps
+result = solve_flow(
+    im,
+    n_steps=5000,
+    velocity_tol=None,
+    k_tol=None,
+    flux_tol=None,
+)
 compute_permeability(result)
 ```
 
-The convergence check fires every `log_every` steps (default 500), so the true stopping
-point is rounded to that interval.
+`convergence_every` controls numerical sampling independently of `log_every`.
+Permeability uses the Darcy velocity over the full domain, while flux imbalance
+uses axis-oriented mass flux on the inlet and outlet pressure faces. The result's
+`converged`, criteria, tolerances, pass streak, and exact `n_iterations` are also
+preserved by VTR export/import.
+
+The former `tol` argument remains as a deprecated alias for `velocity_tol`.
 
 To save the converged result to a VTR file, call `export_to_vtk` on the returned object:
 
 ```python
-result = solve_flow(im, direction="x", tol=1e-4)
+result = solve_flow(im, direction="x", velocity_tol=1e-4)
 result.export_to_vtk("sample")  # writes sample-<step>-x.vtr
 ```
 

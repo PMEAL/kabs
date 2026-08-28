@@ -148,6 +148,10 @@ class SinglePhaseSolver:
         tile_size: int | tuple[int, int, int] = 16,
         collision_model: Literal["mrt", "srt"] = "mrt",
         _enable_convergence_monitor: bool = False,
+        _convergence_needs_velocity: bool = False,
+        _convergence_needs_permeability: bool = False,
+        _convergence_needs_flux: bool = False,
+        _convergence_direction: str = "x",
     ):
         """Create a solver using dense, fully tiled, or pore-tile storage.
 
@@ -159,7 +163,43 @@ class SinglePhaseSolver:
         self.storage = _normalize_storage(storage, sparse_storage)
         self.sparse_storage = self.storage == "sparse"
         self.tile_size = _normalize_tile_size(tile_size)
-        self._enable_convergence_monitor = _enable_convergence_monitor
+        if _enable_convergence_monitor and not any(
+            (
+                _convergence_needs_velocity,
+                _convergence_needs_permeability,
+                _convergence_needs_flux,
+            )
+        ):
+            _convergence_needs_velocity = True
+        self._convergence_needs_velocity = bool(_convergence_needs_velocity)
+        self._convergence_needs_permeability = bool(
+            _convergence_needs_permeability
+        )
+        self._convergence_needs_flux = bool(_convergence_needs_flux)
+        self._enable_convergence_monitor = any(
+            (
+                self._convergence_needs_velocity,
+                self._convergence_needs_permeability,
+                self._convergence_needs_flux,
+            )
+        )
+        self._convergence_axis = {"x": 0, "y": 1, "z": 2}[
+            _convergence_direction
+        ]
+        offset = 0
+        self._convergence_velocity_offset = -1
+        self._convergence_flow_offset = -1
+        self._convergence_flux_offset = -1
+        if self._convergence_needs_velocity:
+            self._convergence_velocity_offset = offset
+            offset += 2
+        if self._convergence_needs_permeability:
+            self._convergence_flow_offset = offset
+            offset += 1
+        if self._convergence_needs_flux:
+            self._convergence_flux_offset = offset
+            offset += 2
+        self._convergence_sum_count = offset
         object.__setattr__(self, "_last_vtr", None)
 
         nx, ny, nz = im.shape
@@ -172,11 +212,13 @@ class SinglePhaseSolver:
         self.fz = 0.0
         self.niu = 0.16667
         self.max_v = ti.field(ti.f32, shape=())
+        self.convergence_sums = None
         self.convergence_v_total = None
         self.convergence_v_change = None
         if self._enable_convergence_monitor:
-            self.convergence_v_total = ti.field(ti.f32, shape=())
-            self.convergence_v_change = ti.field(ti.f32, shape=())
+            self.convergence_sums = ti.field(
+                ti.f32, shape=(self._convergence_sum_count,)
+            )
 
         # Boundary condition mode:
         # 0 = periodic
@@ -237,7 +279,7 @@ class SinglePhaseSolver:
             self.rho = ti.field(ti.f32, shape=(nx, ny, nz))
             self.v = ti.Vector.field(3, ti.f32, shape=(nx, ny, nz))
             self.v_previous = None
-            if self._enable_convergence_monitor:
+            if self._convergence_needs_velocity:
                 self.v_previous = ti.Vector.field(
                     3, ti.f32, shape=(nx, ny, nz)
                 )
@@ -253,7 +295,7 @@ class SinglePhaseSolver:
             ) = _create_tiled_population_fields(
                 (nx, ny, nz),
                 self.tile_size,
-                self._enable_convergence_monitor,
+                self._convergence_needs_velocity,
             )
 
         self.e = ti.Vector.field(3, ti.i32, shape=(19))
@@ -739,26 +781,73 @@ class SinglePhaseSolver:
     @ti.kernel
     def reset_convergence_sums(self):
         """Reset the device-side convergence reduction totals."""
-        self.convergence_v_total[None] = 0.0
-        self.convergence_v_change[None] = 0.0
+        for index in ti.static(range(self._convergence_sum_count)):
+            self.convergence_sums[index] = 0.0
 
     @ti.kernel
-    def accumulate_convergence_sums(self):
-        """Accumulate velocity magnitude and snapshot change on the device."""
+    def _accumulate_convergence_sums(self, has_previous: ti.i32):
+        """Accumulate enabled convergence observables on the device."""
         for idx in ti.grouped(self.v):
-            if idx.x < self.nx and idx.y < self.ny and idx.z < self.nz:
-                for component in ti.static(range(3)):
-                    ti.atomic_add(
-                        self.convergence_v_total[None],
-                        ti.abs(self.v[idx][component]),
-                    )
-                    ti.atomic_add(
-                        self.convergence_v_change[None],
-                        ti.abs(
-                            self.v[idx][component]
-                            - self.v_previous[idx][component]
-                        ),
-                    )
+            if (
+                idx.x < self.nx
+                and idx.y < self.ny
+                and idx.z < self.nz
+                and self.solid[idx] == 0
+            ):
+                if ti.static(self._convergence_needs_velocity):
+                    for component in ti.static(range(3)):
+                        ti.atomic_add(
+                            self.convergence_sums[
+                                self._convergence_velocity_offset
+                            ],
+                            ti.abs(self.v[idx][component]),
+                        )
+                        if has_previous != 0:
+                            ti.atomic_add(
+                                self.convergence_sums[
+                                    self._convergence_velocity_offset + 1
+                                ],
+                                ti.abs(
+                                    self.v[idx][component]
+                                    - self.v_previous[idx][component]
+                                ),
+                            )
+                if ti.static(
+                    self._convergence_needs_permeability
+                    or self._convergence_needs_flux
+                ):
+                    directional_velocity = self.v[idx][
+                        ti.static(self._convergence_axis)
+                    ]
+                    if ti.static(self._convergence_needs_permeability):
+                        ti.atomic_add(
+                            self.convergence_sums[self._convergence_flow_offset],
+                            directional_velocity,
+                        )
+                    if ti.static(self._convergence_needs_flux):
+                        coordinate = idx[ti.static(self._convergence_axis)]
+                        axis_size = ti.static(
+                            (self.nx, self.ny, self.nz)[self._convergence_axis]
+                        )
+                        mass_flux = self.rho[idx] * directional_velocity
+                        if coordinate == 0:
+                            ti.atomic_add(
+                                self.convergence_sums[
+                                    self._convergence_flux_offset
+                                ],
+                                mass_flux,
+                            )
+                        if coordinate == axis_size - 1:
+                            ti.atomic_add(
+                                self.convergence_sums[
+                                    self._convergence_flux_offset + 1
+                                ],
+                                mass_flux,
+                            )
+
+    def accumulate_convergence_sums(self, has_previous=True):
+        """Accumulate enabled observables, optionally against a snapshot."""
+        self._accumulate_convergence_sums(1 if has_previous else 0)
 
     @ti.kernel
     def snapshot_velocity(self):
@@ -768,11 +857,8 @@ class SinglePhaseSolver:
                 self.v_previous[idx] = self.v[idx]
 
     def get_convergence_sums(self):
-        """Return the two scalar device-side convergence totals."""
-        return (
-            self.convergence_v_total[None],
-            self.convergence_v_change[None],
-        )
+        """Transfer the small enabled-observable vector to the host once."""
+        return tuple(float(value) for value in self.convergence_sums.to_numpy())
 
     def step(self):
         self.collision()

@@ -70,27 +70,48 @@ def _parse_meta_comment(xml_header):
     """Extract simulation metadata from a kabs-meta comment, if present."""
     m = _META_RE.search(xml_header)
     if not m:
-        return None, None, None
-    body = m.group(1)
-    direction = nu = collision_model = None
-    dm = re.search(r'direction="([xyz])"', body)
-    nm = re.search(r'nu="([^"]+)"', body)
-    cm = re.search(r'collision_model="(mrt|srt)"', body)
-    if dm:
-        direction = dm.group(1)
-    if nm:
-        nu = float(nm.group(1))
-    if cm:
-        collision_model = cm.group(1)
-    return direction, nu, collision_model
+        return {}
+    raw = dict(re.findall(r'(\w+)="([^"]*)"', m.group(1)))
+    meta = {}
+    if raw.get("direction") in ("x", "y", "z"):
+        meta["direction"] = raw["direction"]
+    if raw.get("collision_model") in ("mrt", "srt"):
+        meta["collision_model"] = raw["collision_model"]
+    for name in (
+        "nu",
+        "rho_in",
+        "rho_out",
+        "velocity_tol",
+        "k_tol",
+        "flux_tol",
+        "velocity_criterion",
+        "k_criterion",
+        "flux_criterion",
+    ):
+        try:
+            value = float(raw[name])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if np.isfinite(value):
+            meta[name] = value
+    for name in ("n_iterations", "convergence_every", "consecutive_passes"):
+        try:
+            value = int(raw[name])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if value >= 0:
+            meta[name] = value
+    if raw.get("converged") in ("true", "false"):
+        meta["converged"] = raw["converged"] == "true"
+    return meta
 
 
 def read_flow_vtr(vtr_file, verbose=False):
     """Read a flow .vtr file and return a :class:`~kabs.FlowResult`.
 
-    ``direction``, ``nu``, and ``collision_model`` are restored from the file
-    when it was written by :func:`write_flow_vtr` with a ``FlowResult`` that
-    carried them.
+    Simulation, pressure, and convergence provenance are restored when the
+    file was written by :func:`write_flow_vtr` with a ``FlowResult`` that
+    carried them. Older files without those attributes remain supported.
     """
     from ._flow_common import FlowResult
 
@@ -114,16 +135,14 @@ def read_flow_vtr(vtr_file, verbose=False):
     solid = read_array(raw, binary_start, arrays, "Solid", nx, ny, nz)
     rho = read_array(raw, binary_start, arrays, "rho", nx, ny, nz)
     velocity = read_array(raw, binary_start, arrays, "velocity", nx, ny, nz)
-    direction, nu, collision_model = _parse_meta_comment(xml_header)
+    metadata = _parse_meta_comment(xml_header)
     if verbose:
         print("  Arrays loaded.")
     return FlowResult.from_arrays(
         solid,
         rho,
         velocity,
-        direction=direction,
-        nu=nu,
-        collision_model=collision_model,
+        **metadata,
     )
 
 
@@ -162,17 +181,34 @@ def write_flow_vtr(path, result):
 
     # Embed simulation metadata as a comment in the XML header so it survives
     # the write/read round-trip.
-    direction = getattr(result, "direction", None)
-    nu = getattr(result, "nu", None)
-    collision_model = getattr(result, "collision_model", None)
-    if direction is not None or nu is not None or collision_model is not None:
+    metadata = {
+        name: getattr(result, name, None)
+        for name in (
+            "direction",
+            "nu",
+            "collision_model",
+            "rho_in",
+            "rho_out",
+            "converged",
+            "n_iterations",
+            "velocity_tol",
+            "k_tol",
+            "flux_tol",
+            "velocity_criterion",
+            "k_criterion",
+            "flux_criterion",
+            "convergence_every",
+            "consecutive_passes",
+        )
+    }
+    if any(value is not None for value in metadata.values()):
         attrs = []
-        if direction is not None:
-            attrs.append(f'direction="{direction}"')
-        if nu is not None:
-            attrs.append(f'nu="{nu}"')
-        if collision_model is not None:
-            attrs.append(f'collision_model="{collision_model}"')
+        for name, value in metadata.items():
+            if value is None:
+                continue
+            if isinstance(value, (bool, np.bool_)):
+                value = str(bool(value)).lower()
+            attrs.append(f'{name}="{value}"')
         comment = f"<!-- kabs-meta {' '.join(attrs)} -->\n".encode()
         vtr_path = path + ".vtr"
         with open(vtr_path, "rb") as fh:

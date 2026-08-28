@@ -78,7 +78,14 @@ def _edge_channel_image(direction, length=12):
 # Suite 1: Structural / smoke tests
 # ---------------------------------------------------------------------------
 
-_TINY_KW = dict(direction="x", nu=_NU, n_steps=500, tol=1e-3, log_every=100, verbose=False)
+_TINY_KW = dict(
+    direction="x",
+    nu=_NU,
+    n_steps=500,
+    velocity_tol=1e-3,
+    log_every=100,
+    verbose=False,
+)
 
 
 class TestSolveFlowXlbSmoke:
@@ -173,7 +180,7 @@ def test_flow_reaches_edge_pores_on_all_pressure_faces(direction, axis):
         direction=direction,
         nu=_NU,
         n_steps=400,
-        tol=None,
+        velocity_tol=None,
         log_every=100,
         verbose=False,
     )
@@ -191,7 +198,13 @@ def test_flow_reaches_edge_pores_on_all_pressure_faces(direction, axis):
 # Suite 2: XLB vs Taichi numerical agreement
 # ---------------------------------------------------------------------------
 
-_SOLVE_KW = dict(nu=_NU, n_steps=4000, tol=1e-3, log_every=200, verbose=False)
+_SOLVE_KW = dict(
+    nu=_NU,
+    n_steps=4000,
+    velocity_tol=1e-3,
+    log_every=200,
+    verbose=False,
+)
 
 
 class TestXlbVsTaichi:

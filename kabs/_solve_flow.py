@@ -1,10 +1,19 @@
-"""High-level entry point: run a single-phase LBM flow simulation."""
+"""High-level entry point for pressure-driven single-phase LBM flow."""
 
 import time
 from typing import Literal
 
 import numpy as np
 
+from ._convergence import (
+    ConvergenceConfig,
+    ConvergenceController,
+    ConvergenceObservables,
+    TOL_UNSET,
+    VELOCITY_TOL_UNSET,
+    normalize_convergence_tolerances,
+    validate_solver_intervals,
+)
 from ._flow_common import (
     FlowResult,
     _DEFAULT_SPARSE,
@@ -14,16 +23,58 @@ from ._flow_common import (
     _normalize_collision_model,
 )
 
-
 __all__ = ["solve_flow", "solve_flow_taichi", "FlowResult"]
 
-# Pressure BCs are hardcoded: only the difference matters for Darcy's law,
-# and both u_D and gradP scale with Δρ so they cancel in k = u_D*mu/gradP.
 _BC_SETTERS = {
     "x": ("set_bc_rho_x0", "set_bc_rho_x1"),
     "y": ("set_bc_rho_y0", "set_bc_rho_y1"),
     "z": ("set_bc_rho_z0", "set_bc_rho_z1"),
 }
+
+
+def _print_convergence_report(report, config):
+    parts = []
+    for label, criterion, tolerance in (
+        ("velocity", report.velocity_criterion, config.velocity_tol),
+        ("K", report.k_criterion, config.k_tol),
+        ("flux", report.flux_criterion, config.flux_tol),
+    ):
+        if tolerance is None:
+            continue
+        value = "undefined" if criterion is None else f"{criterion:.3e}"
+        parts.append(f"{label}={value} (tol={tolerance:.3e})")
+    print("         " + "  ".join(parts) + f"  streak={report.consecutive_passes}")
+
+
+def _taichi_observables(solver, config, has_velocity_snapshot):
+    solver.reset_convergence_sums()
+    solver.accumulate_convergence_sums(has_velocity_snapshot)
+    sums = solver.get_convergence_sums()
+    return ConvergenceObservables(
+        velocity_total=(
+            sums[solver._convergence_velocity_offset]
+            if config.needs_velocity
+            else None
+        ),
+        velocity_change=(
+            sums[solver._convergence_velocity_offset + 1]
+            if config.needs_velocity and has_velocity_snapshot
+            else None
+        ),
+        directional_flow=(
+            sums[solver._convergence_flow_offset]
+            if config.needs_permeability
+            else None
+        ),
+        inlet_mass_flux=(
+            sums[solver._convergence_flux_offset] if config.needs_flux else None
+        ),
+        outlet_mass_flux=(
+            sums[solver._convergence_flux_offset + 1]
+            if config.needs_flux
+            else None
+        ),
+    )
 
 
 def solve_flow_taichi(
@@ -34,89 +85,91 @@ def solve_flow_taichi(
     log_every=500,
     verbose=True,
     sparse=_DEFAULT_SPARSE,
-    tol=1e-3,
+    tol=TOL_UNSET,
     *,
+    velocity_tol=VELOCITY_TOL_UNSET,
+    k_tol=None,
+    flux_tol=None,
+    convergence_every=500,
     storage: Literal["dense", "tiled", "sparse"] = _DEFAULT_STORAGE,
     tile_size: int | tuple[int, int, int] = 16,
     collision_model: Literal["mrt", "srt"] = "mrt",
 ):
-    """
-    Run a pressure-driven single-phase LBM simulation with Taichi.
+    """Run a pressure-driven flow solve using Taichi.
+
+    Each non-``None`` tolerance enables a convergence criterion. All enabled
+    criteria must pass on two consecutive checks. ``tol`` is a deprecated
+    alias for ``velocity_tol``.
 
     Parameters
     ----------
     im : np.ndarray, shape (nx, ny, nz)
-        Binary image of the pore space.  1 (or True) = pore, 0 (or False) = solid.
-        This matches the PoreSpy convention.
+        Binary pore image using the PoreSpy convention: 1 is pore and 0 is
+        solid.
     direction : {'x', 'y', 'z'}
-        Axis along which the pressure gradient is applied.  Default ``'x'``.
+        Positive coordinate direction of the pressure-driven flow.
     n_steps : int
-        Number of LBM time steps to run.  Default 15000.
+        Exact maximum number of LBM updates. Default 15000.
     nu : float
-        Kinematic viscosity in lattice units.  Default 1/6.
+        Kinematic viscosity in lattice units. Default 1/6.
     log_every : int
-        Print a progress line every this many steps.  Default 500.
+        Completed steps between progress messages. Zero disables logging.
     verbose : bool
-        Print progress to stdout.  Default True.
+        Print progress and convergence reports.
     sparse : bool
-        Backwards-compatible alias for storage.  ``True`` selects ``'sparse'``
-        and ``False`` selects ``'dense'``.  Contradictory explicit values for
-        ``sparse`` and ``storage`` raise ``ValueError``.  Default False.
+        Backward-compatible alias for the Taichi storage option.
     tol : float or None
-        Convergence tolerance.  The simulation stops early when the relative
-        change in the total velocity magnitude between log intervals falls
-        below this value: ``delta|v| / |v| < tol``.  Set to ``None`` to
-        always run the full ``n_steps``.  Default 1e-3.
+        Deprecated alias for ``velocity_tol``.
+    velocity_tol, k_tol, flux_tol : float or None, keyword-only
+        Relative convergence tolerances. ``None`` disables that criterion;
+        setting all three to ``None`` disables monitoring entirely.
+    convergence_every : int, keyword-only
+        Completed steps between convergence samples, independent of logging.
     storage : {'dense', 'tiled', 'sparse'}, keyword-only
-        Taichi storage layout.  ``'dense'`` is fastest for small images but is
-        subject to Taichi's monolithic field-index limit.  ``'tiled'`` places
-        the fields in pointer-backed dense tiles and activates every image
-        tile.  ``'sparse'`` uses the same hierarchy but activates only tiles
-        containing pore voxels.  Default ``'dense'``.
+        Taichi field layout. Default ``'dense'``.
     tile_size : int or tuple of 3 ints, keyword-only
-        Dense tile dimensions for tiled and sparse storage.  An integer uses
-        the same size along all axes.  Default 16.
+        Tile dimensions for tiled and sparse layouts. Default 16.
     collision_model : {'mrt', 'srt'}, keyword-only
-        Collision operator. ``'mrt'`` preserves the historical Taichi solver
-        behavior and remains the default. ``'srt'`` selects the BGK operator.
+        Taichi collision operator. Default ``'mrt'``.
 
     Returns
     -------
-    result : FlowResult
-        Result object containing ``solid``, ``rho``, ``velocity``, ``direction``,
-        and ``nu`` as numpy arrays/values.  Pass directly to
-        ``compute_permeability()`` or ``solve_hydraulic_conductance()``,
-        or call ``result.export_to_vtk(prefix)`` to save a VTR file.
-
-    Notes
-    -----
-    This is the Taichi-specific implementation behind ``solve_flow``. Taichi
-    must be initialized by the caller before invoking this function:
-
-        import taichi as ti
-        ti.init(arch=ti.cpu)
-
-    Tiled storage removes the monolithic-index limit, not the underlying
-    memory cost.  Fully activating a large porous image can still require far
-    more memory than the available host or accelerator memory.
+    FlowResult
+        Final fields plus exact iteration and convergence provenance.
     """
     from ._single_phase_solver import SinglePhaseSolver
 
-    direction = direction.lower()
-    if direction not in _BC_SETTERS:
+    if not isinstance(direction, str) or direction.lower() not in _BC_SETTERS:
         raise ValueError(f"direction must be 'x', 'y', or 'z', got {direction!r}")
+    direction = direction.lower()
+    n_steps, log_every, convergence_every = validate_solver_intervals(
+        n_steps, log_every, convergence_every
+    )
+    velocity_tol, k_tol, flux_tol = normalize_convergence_tolerances(
+        tol=tol,
+        velocity_tol=velocity_tol,
+        k_tol=k_tol,
+        flux_tol=flux_tol,
+    )
+    config = ConvergenceConfig(
+        check_every=convergence_every,
+        velocity_tol=velocity_tol,
+        k_tol=k_tol,
+        flux_tol=flux_tol,
+    )
 
-    # Public convention: 1=pore, 0=solid (PoreSpy-compatible).
-    # SinglePhaseSolver uses the opposite, so flip here.
     solid_im = (im == 0).astype(np.int8)
-    enable_convergence_monitor = log_every != 0 and n_steps >= abs(log_every)
     solver = SinglePhaseSolver(
         solid_im,
         sparse_storage=sparse,
         storage=storage,
         tile_size=tile_size,
         collision_model=collision_model,
-        _enable_convergence_monitor=enable_convergence_monitor,
+        _enable_convergence_monitor=config.monitoring_enabled,
+        _convergence_needs_velocity=config.needs_velocity,
+        _convergence_needs_permeability=config.needs_permeability,
+        _convergence_needs_flux=config.needs_flux,
+        _convergence_direction=direction,
     )
     set_inlet, set_outlet = _BC_SETTERS[direction]
     getattr(solver, set_inlet)(_RHO_IN)
@@ -124,57 +177,96 @@ def solve_flow_taichi(
     solver.set_viscosity(nu)
     solver.init_simulation()
 
+    controller = None
+    if config.monitoring_enabled:
+        controller = ConvergenceController(
+            config,
+            domain_shape=solid_im.shape,
+            direction=direction,
+            nu=nu,
+            rho_in=_RHO_IN,
+            rho_out=_RHO_OUT,
+        )
+
     time_init = time.time()
     time_pre = time_init
     has_velocity_snapshot = False
-    final_step = n_steps
-    final_criterion = None
+    final_step = 0
+    final_report = None
 
-    for i in range(n_steps + 1):
+    for completed_steps in range(1, n_steps + 1):
         solver.step()
+        final_step = completed_steps
 
-        if i % log_every == 0:
+        if controller is not None and controller.check_due(completed_steps):
+            velocity_only_first_sample = (
+                config.needs_velocity
+                and not has_velocity_snapshot
+                and not config.needs_permeability
+                and not config.needs_flux
+            )
+            observables = (
+                ConvergenceObservables()
+                if velocity_only_first_sample
+                else _taichi_observables(solver, config, has_velocity_snapshot)
+            )
+            final_report = controller.update(observables)
+            if verbose:
+                _print_convergence_report(final_report, config)
+            if final_report.converged:
+                if verbose:
+                    print(f"Converged at step {completed_steps}")
+                break
+            if config.needs_velocity:
+                solver.snapshot_velocity()
+                has_velocity_snapshot = True
+
+        if log_every and completed_steps % log_every == 0:
             time_now = time.time()
             diff = int(time_now - time_pre)
-            elap = int(time_now - time_init)
-            m_d, s_d = divmod(diff, 60)
-            h_d, m_d = divmod(m_d, 60)
-            m_e, s_e = divmod(elap, 60)
-            h_e, m_e = divmod(m_e, 60)
-
+            elapsed = int(time_now - time_init)
+            h_d, remainder = divmod(diff, 3600)
+            m_d, s_d = divmod(remainder, 60)
+            h_e, remainder = divmod(elapsed, 3600)
+            m_e, s_e = divmod(remainder, 60)
             if verbose:
                 print(
-                    f"Step {i:6d}/{n_steps}  "
+                    f"Step {completed_steps:6d}/{n_steps}  "
                     f"interval {h_d:02d}h{m_d:02d}m{s_d:02d}s  "
                     f"elapsed {h_e:02d}h{m_e:02d}m{s_e:02d}s"
                 )
-
-            if enable_convergence_monitor:
-                if has_velocity_snapshot:
-                    solver.reset_convergence_sums()
-                    solver.accumulate_convergence_sums()
-                    v_total, v_change = solver.get_convergence_sums()
-                    if v_total > 0:
-                        final_criterion = v_change / v_total
-                    if verbose:
-                        print(
-                            f"         |v|={v_total:.4e}  delta|v|={v_change:.4e}"
-                        )
-                    if tol is not None and v_total > 0 and final_criterion < tol:
-                        if verbose:
-                            print(
-                                f"Converged at step {i} "
-                                f"(delta|v|/|v| = {final_criterion:.2e} < tol={tol:.2e})"
-                            )
-                        final_step = i
-                        break
-                solver.snapshot_velocity()
-                has_velocity_snapshot = True
             time_pre = time_now
 
-    result = FlowResult(solver, direction, nu, n_iterations=final_step, convergence_criterion=final_criterion)
+    converged = None if controller is None else bool(final_report and final_report.converged)
+    if verbose and final_step == n_steps and not converged:
+        if controller is None:
+            print(f"Completed {n_steps} steps with convergence monitoring disabled")
+        else:
+            print(f"Reached n_steps={n_steps} without convergence")
 
-    return result
+    return FlowResult(
+        solver,
+        direction,
+        nu,
+        n_iterations=final_step,
+        rho_in=_RHO_IN,
+        rho_out=_RHO_OUT,
+        converged=converged,
+        velocity_tol=velocity_tol,
+        k_tol=k_tol,
+        flux_tol=flux_tol,
+        velocity_criterion=(
+            None if final_report is None else final_report.velocity_criterion
+        ),
+        k_criterion=None if final_report is None else final_report.k_criterion,
+        flux_criterion=(
+            None if final_report is None else final_report.flux_criterion
+        ),
+        convergence_every=(convergence_every if controller is not None else None),
+        consecutive_passes=(
+            0 if final_report is None else final_report.consecutive_passes
+        ),
+    )
 
 
 def solve_flow(
@@ -185,8 +277,12 @@ def solve_flow(
     log_every=500,
     verbose=True,
     sparse=_DEFAULT_SPARSE,
-    tol=1e-3,
+    tol=TOL_UNSET,
     *,
+    velocity_tol=VELOCITY_TOL_UNSET,
+    k_tol=None,
+    flux_tol=None,
+    convergence_every=500,
     storage: Literal["dense", "tiled", "sparse"] = _DEFAULT_STORAGE,
     tile_size: int | tuple[int, int, int] = 16,
     backend: Literal["taichi", "xlb"] = "taichi",
@@ -195,29 +291,10 @@ def solve_flow(
 ):
     """Run a pressure-driven single-phase LBM simulation to steady state.
 
-    Parameters are shared by both solver implementations unless noted below.
-    The default ``backend='taichi'`` preserves the behaviour of earlier
-    releases. Set ``backend='xlb'`` to use the XLB implementation.
-
-    Parameters
-    ----------
-    backend : {'taichi', 'xlb'}, keyword-only
-        Solver implementation. Default ``'taichi'``.
-    compute_backend : {'jax', 'warp'}, keyword-only
-        XLB compute backend. Ignored by the Taichi implementation. Default
-        ``'jax'``.
-    collision_model : {'mrt', 'srt'} or None, keyword-only
-        Collision operator. ``None`` selects the backend default: MRT for
-        Taichi and SRT/BGK for XLB. XLB does not support MRT.
-    sparse, storage, tile_size
-        Taichi storage settings. XLB does not currently implement these
-        layouts, so non-default values are rejected with ``backend='xlb'``.
-
-    Returns
-    -------
-    FlowResult
-        The converged density and velocity fields, compatible with
-        ``compute_permeability()`` and ``solve_hydraulic_conductance()``.
+    Convergence arguments have the same composable semantics as
+    :func:`solve_flow_taichi`. ``backend='taichi'`` uses the native Taichi
+    solver; ``backend='xlb'`` selects XLB with either its JAX or Warp compute
+    backend. Taichi storage options are rejected for XLB.
     """
     try:
         backend_key = backend.lower()
@@ -226,10 +303,15 @@ def solve_flow(
             f"backend must be 'taichi' or 'xlb', got {backend!r}"
         ) from exc
 
+    convergence_args = dict(
+        tol=tol,
+        velocity_tol=velocity_tol,
+        k_tol=k_tol,
+        flux_tol=flux_tol,
+        convergence_every=convergence_every,
+    )
     if backend_key == "taichi":
-        effective_collision_model = (
-            "mrt" if collision_model is None else collision_model
-        )
+        effective_collision_model = "mrt" if collision_model is None else collision_model
         return solve_flow_taichi(
             im,
             direction=direction,
@@ -238,31 +320,21 @@ def solve_flow(
             log_every=log_every,
             verbose=verbose,
             sparse=sparse,
-            tol=tol,
             storage=storage,
             tile_size=tile_size,
             collision_model=effective_collision_model,
+            **convergence_args,
         )
 
     if backend_key == "xlb":
         if collision_model is not None:
-            effective_collision_model = _normalize_collision_model(
-                collision_model
-            )
+            effective_collision_model = _normalize_collision_model(collision_model)
             if effective_collision_model != "srt":
-                raise ValueError(
-                    "backend='xlb' only supports collision_model='srt'"
-                )
-        if (
-            sparse != _DEFAULT_SPARSE
-            or storage != _DEFAULT_STORAGE
-            or tile_size != 16
-        ):
+                raise ValueError("backend='xlb' only supports collision_model='srt'")
+        if sparse != _DEFAULT_SPARSE or storage != _DEFAULT_STORAGE or tile_size != 16:
             raise ValueError(
-                "sparse, storage, and tile_size are only supported with "
-                "backend='taichi'"
+                "sparse, storage, and tile_size are only supported with backend='taichi'"
             )
-
         from ._solve_flow_xlb import solve_flow_xlb
 
         return solve_flow_xlb(
@@ -272,8 +344,8 @@ def solve_flow(
             nu=nu,
             log_every=log_every,
             verbose=verbose,
-            tol=tol,
             compute_backend=compute_backend,
+            **convergence_args,
         )
 
     raise ValueError(f"backend must be 'taichi' or 'xlb', got {backend!r}")

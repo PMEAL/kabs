@@ -136,6 +136,46 @@ class TestVtrRoundtrip:
         soln = read_flow_vtr(prefix + ".vtr")
         assert soln.collision_model == collision_model
 
+    def test_roundtrip_convergence_and_pressure_metadata(self):
+        result = FlowResult.from_arrays(
+            solid=np.zeros((4, 4, 4), dtype=np.int8),
+            rho=np.ones((4, 4, 4), dtype=np.float32),
+            velocity=np.zeros((4, 4, 4, 3), dtype=np.float32),
+            direction="x",
+            nu=1.0 / 6.0,
+            rho_in=1.0,
+            rho_out=0.99,
+            converged=True,
+            n_iterations=1200,
+            velocity_tol=1e-2,
+            k_tol=5e-3,
+            flux_tol=5e-3,
+            velocity_criterion=4e-3,
+            k_criterion=2e-3,
+            flux_criterion=3e-3,
+            convergence_every=100,
+            consecutive_passes=2,
+        )
+        prefix = self._prefix("metadata")
+        write_flow_vtr(prefix, result)
+        loaded = read_flow_vtr(prefix + ".vtr")
+
+        assert loaded.rho_in == pytest.approx(1.0)
+        assert loaded.rho_out == pytest.approx(0.99)
+        assert loaded.converged is True
+        assert loaded.n_iterations == 1200
+        assert loaded.velocity_tol == pytest.approx(1e-2)
+        assert loaded.k_tol == pytest.approx(5e-3)
+        assert loaded.flux_tol == pytest.approx(5e-3)
+        assert loaded.velocity_criterion == pytest.approx(4e-3)
+        assert loaded.convergence_criterion == loaded.velocity_criterion
+        loaded.convergence_criterion = 0.25
+        assert loaded.velocity_criterion == pytest.approx(0.25)
+        assert loaded.k_criterion == pytest.approx(2e-3)
+        assert loaded.flux_criterion == pytest.approx(3e-3)
+        assert loaded.convergence_every == 100
+        assert loaded.consecutive_passes == 2
+
     # -----------------------------------------------------------------------
     # Velocity component ordering
     # -----------------------------------------------------------------------

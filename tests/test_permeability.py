@@ -80,7 +80,7 @@ _SOLVE_KW = dict(
     direction="x",
     nu=_NU,
     n_steps=4000,
-    tol=1e-3,
+    velocity_tol=1e-3,
     log_every=200,
     verbose=False,
 )
@@ -130,7 +130,7 @@ class TestBundlePermeability:
 _SOLVE_KW_BASE = dict(
     nu=_NU,
     n_steps=4000,
-    tol=1e-3,
+    velocity_tol=1e-3,
     log_every=200,
     verbose=False,
 )
@@ -237,7 +237,7 @@ class TestSrtPermeability:
                     direction="x",
                     nu=nu,
                     n_steps=4000,
-                    tol=1e-3,
+                    velocity_tol=1e-3,
                     log_every=200,
                     verbose=False,
                     collision_model="srt",

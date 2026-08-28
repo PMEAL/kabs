@@ -553,7 +553,7 @@ def solve_hydraulic_conductance(
         im_padded,
         direction=direction,
         n_steps=n_steps,
-        tol=tol,
+        velocity_tol=tol,
         log_every=log_every,
     )
 

@@ -14,7 +14,7 @@ from kabs._single_phase_solver import SinglePhaseSolver
 _QUICK_SOLVE = {
     "direction": "x",
     "n_steps": 4,
-    "tol": None,
+    "velocity_tol": None,
     "log_every": 10,
     "verbose": False,
 }

@@ -49,26 +49,26 @@ def _solve(case, direction, backend, fixed_steps):
 
     if case == "channel":
         image = _cylinder_channel(direction)
-        n_steps, log_every, tol = 500, 100, 1e-3
+        n_steps, log_every, velocity_tol = 500, 100, 1e-3
     elif case == "open":
         image = _open_channel()
-        n_steps, log_every, tol = 400, 100, None
+        n_steps, log_every, velocity_tol = 400, 100, None
     elif case == "obstacle":
         image = _obstacle_channel()
-        n_steps, log_every, tol = 800, 100, 1e-3
+        n_steps, log_every, velocity_tol = 800, 100, 1e-3
     else:
         image = _bundle()
-        n_steps, log_every, tol = 4000, 200, 1e-3
+        n_steps, log_every, velocity_tol = 4000, 200, 1e-3
 
     if fixed_steps is not None:
         n_steps = fixed_steps
-        tol = None
+        velocity_tol = None
 
     kwargs = {
         "direction": direction,
         "n_steps": n_steps,
         "log_every": log_every,
-        "tol": tol,
+        "velocity_tol": velocity_tol,
         "verbose": False,
         "collision_model": "srt",
     }

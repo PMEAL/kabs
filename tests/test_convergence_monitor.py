@@ -127,8 +127,9 @@ def test_periodic_checks_do_not_extract_velocity(monkeypatch):
     result = solve_flow_taichi(
         image,
         n_steps=2,
-        log_every=1,
-        tol=None,
+        log_every=0,
+        convergence_every=1,
+        velocity_tol=1e-12,
         verbose=False,
     )
 
@@ -158,8 +159,9 @@ def test_first_snapshot_is_post_step_and_terminal_check_does_not_resnapshot(
     result = solve_flow_taichi(
         np.ones((3, 3, 3), dtype=np.int8),
         n_steps=1,
-        log_every=1,
-        tol=1e9,
+        log_every=0,
+        convergence_every=1,
+        velocity_tol=1e9,
         verbose=False,
     )
 
@@ -167,14 +169,69 @@ def test_first_snapshot_is_post_step_and_terminal_check_does_not_resnapshot(
     assert snapshot_steps == [1]
 
 
-def test_single_check_skips_unused_snapshot_allocation():
+def test_disabled_monitor_skips_snapshot_allocation():
     result = solve_flow_taichi(
         np.ones((3, 3, 3), dtype=np.int8),
         n_steps=0,
         log_every=10,
-        tol=None,
+        velocity_tol=None,
+        k_tol=None,
+        flux_tol=None,
         verbose=False,
     )
 
     assert result.convergence_criterion is None
     assert result._solver.v_previous is None
+    assert result._solver.convergence_sums is None
+
+
+@pytest.mark.parametrize(
+    ("storage", "direction", "axis"),
+    [("dense", "x", 0), ("tiled", "y", 1), ("sparse", "z", 2)],
+)
+def test_combined_reducer_matches_masked_numpy(storage, direction, axis):
+    shape = (3, 4, 5)
+    solid = np.zeros(shape, dtype=np.int8)
+    solid[1, 2, 3] = 1
+    solver = SinglePhaseSolver(
+        solid,
+        storage=storage,
+        tile_size=(2, 3, 4),
+        _convergence_needs_velocity=True,
+        _convergence_needs_permeability=True,
+        _convergence_needs_flux=True,
+        _convergence_direction=direction,
+    )
+    solver.init_simulation()
+    rng = np.random.default_rng(42)
+    previous = rng.normal(size=(*shape, 3)).astype(np.float32)
+    current = rng.normal(size=(*shape, 3)).astype(np.float32)
+    rho = rng.uniform(0.9, 1.1, size=shape).astype(np.float32)
+    # Deliberately nonzero solid values prove that all observables are masked.
+    previous[solid != 0] = 50.0
+    current[solid != 0] = -50.0
+    rho[solid != 0] = 20.0
+    solver.v.from_numpy(previous)
+    solver.snapshot_velocity()
+    solver.v.from_numpy(current)
+    rho_storage = np.zeros(solver.rho.shape, dtype=np.float32)
+    rho_storage[: shape[0], : shape[1], : shape[2]] = rho
+    solver.rho.from_numpy(rho_storage)
+    solver.reset_convergence_sums()
+    solver.accumulate_convergence_sums()
+    actual = solver.get_convergence_sums()
+
+    pore = solid == 0
+    directional = current[..., axis]
+    inlet = [slice(None)] * 3
+    outlet = [slice(None)] * 3
+    inlet[axis] = 0
+    outlet[axis] = -1
+    expected = (
+        np.sum(np.abs(current[pore])),
+        np.sum(np.abs(current[pore] - previous[pore])),
+        np.sum(directional[pore]),
+        np.sum((rho * directional * pore)[tuple(inlet)]),
+        np.sum((rho * directional * pore)[tuple(outlet)]),
+    )
+    assert actual == pytest.approx(expected, rel=2e-5, abs=2e-6)

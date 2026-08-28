@@ -5,7 +5,17 @@ import time
 
 import numpy as np
 
+from ._convergence import (
+    ConvergenceConfig,
+    ConvergenceController,
+    ConvergenceObservables,
+    TOL_UNSET,
+    VELOCITY_TOL_UNSET,
+    normalize_convergence_tolerances,
+    validate_solver_intervals,
+)
 from ._flow_common import FlowResult, _RHO_IN, _RHO_OUT
+from ._solve_flow import _print_convergence_report
 
 
 __all__ = ["solve_flow_xlb"]
@@ -19,30 +29,119 @@ _FACE_NAMES = {
 }
 
 
-@lru_cache(maxsize=1)
-def _get_jax_convergence_reducer():
-    """Return a compiled reduction that keeps array-sized work on the device."""
+@lru_cache(maxsize=None)
+def _get_jax_convergence_reducer(
+    needs_velocity=True, needs_permeability=False, needs_flux=False, flow_axis=0
+):
+    """Return a criterion-aware compiled device reduction."""
     import jax
     import jax.numpy as jnp
 
     @jax.jit
-    def reduce_velocity_change(current, previous):
-        return jnp.stack(
-            (
-                jnp.sum(jnp.abs(current)),
-                jnp.sum(jnp.abs(current - previous)),
+    def reduce_observables(rho, current, previous, pore):
+        values = []
+        if needs_velocity:
+            component_mask = pore
+            values.extend(
+                (
+                    jnp.sum(jnp.where(component_mask, jnp.abs(current), 0.0)),
+                    jnp.sum(
+                        jnp.where(
+                            component_mask,
+                            jnp.abs(current - previous),
+                            0.0,
+                        )
+                    ),
+                )
             )
-        )
+        directional = current[flow_axis]
+        spatial_pore = pore[0]
+        if needs_permeability:
+            values.append(jnp.sum(jnp.where(spatial_pore, directional, 0.0)))
+        if needs_flux:
+            mass_flux = jnp.where(spatial_pore, rho[0] * directional, 0.0)
+            values.extend(
+                (
+                    jnp.sum(jnp.take(mass_flux, 0, axis=flow_axis)),
+                    jnp.sum(jnp.take(mass_flux, -1, axis=flow_axis)),
+                )
+            )
+        return jnp.stack(values)
 
-    return reduce_velocity_change
+    return reduce_observables
 
 
 def _convergence_sums_to_host(current, previous):
-    """Synchronize and transfer the two convergence scalars together."""
+    """Backward-compatible test helper for the velocity-only reduction."""
     import jax
+    import jax.numpy as jnp
 
-    sums = jax.device_get(_get_jax_convergence_reducer()(current, previous))
+    spatial_shape = current.shape[-3:]
+    rho = jnp.ones((1, *spatial_shape), dtype=current.dtype)
+    pore = jnp.ones((1, *spatial_shape), dtype=bool)
+    sums = jax.device_get(
+        _get_jax_convergence_reducer()(rho, current, previous, pore)
+    )
     return float(sums[0]), float(sums[1])
+
+
+class _JaxConvergenceMonitor:
+    def __init__(self, pore_mask, config, flow_axis):
+        self._pore_host = np.asarray(pore_mask, dtype=bool)[None, ...]
+        self._pore = None
+        self._config = config
+        self._flow_axis = flow_axis
+        self._previous = None
+
+    def sample(self, rho, velocity):
+        if (
+            self._config.needs_velocity
+            and self._previous is None
+            and not self._config.needs_permeability
+            and not self._config.needs_flux
+        ):
+            return ConvergenceObservables()
+        import jax
+        import jax.numpy as jnp
+
+        if self._pore is None:
+            try:
+                self._pore = jax.device_put(self._pore_host, velocity.sharding)
+            except (AttributeError, TypeError, ValueError):
+                self._pore = jnp.asarray(self._pore_host)
+        previous = velocity if self._previous is None else self._previous
+        reducer = _get_jax_convergence_reducer(
+            self._config.needs_velocity,
+            self._config.needs_permeability,
+            self._config.needs_flux,
+            self._flow_axis,
+        )
+        values = jax.device_get(reducer(rho, velocity, previous, self._pore))
+        offset = 0
+        velocity_total = velocity_change = directional_flow = None
+        inlet_mass_flux = outlet_mass_flux = None
+        if self._config.needs_velocity:
+            velocity_total = float(values[offset])
+            velocity_change = (
+                float(values[offset + 1]) if self._previous is not None else None
+            )
+            offset += 2
+        if self._config.needs_permeability:
+            directional_flow = float(values[offset])
+            offset += 1
+        if self._config.needs_flux:
+            inlet_mass_flux = float(values[offset])
+            outlet_mass_flux = float(values[offset + 1])
+        return ConvergenceObservables(
+            velocity_total=velocity_total,
+            velocity_change=velocity_change,
+            directional_flow=directional_flow,
+            inlet_mass_flux=inlet_mass_flux,
+            outlet_mass_flux=outlet_mass_flux,
+        )
+
+    def snapshot_velocity(self, velocity):
+        self._previous = velocity
 
 
 def solve_flow_xlb(
@@ -52,8 +151,13 @@ def solve_flow_xlb(
     nu=1.0 / 6.0,
     log_every=500,
     verbose=True,
-    tol=1e-3,
+    tol=TOL_UNSET,
     compute_backend="jax",
+    *,
+    velocity_tol=VELOCITY_TOL_UNSET,
+    k_tol=None,
+    flux_tol=None,
+    convergence_every=500,
 ):
     """
     Run a pressure-driven single-phase LBM simulation using the XLB library.
@@ -75,15 +179,17 @@ def solve_flow_xlb(
     nu : float
         Kinematic viscosity in lattice units.  Default 1/6.
     log_every : int
-        Print a progress line and check convergence every this many steps.
-        Default 500.
+        Print a progress line every this many completed steps. Zero disables
+        progress logging. Default 500.
     verbose : bool
         Print progress to stdout.  Default True.
     tol : float or None
-        Convergence tolerance.  The simulation stops early when the relative
-        change in the total velocity magnitude between log intervals falls
-        below this value: ``delta|v| / |v| < tol``.  Set to ``None`` to
-        always run the full ``n_steps``.  Default 1e-3.
+        Deprecated alias for ``velocity_tol``.
+    velocity_tol, k_tol, flux_tol : float or None
+        Independently optional convergence tolerances. All enabled criteria
+        must pass on two consecutive checks.
+    convergence_every : int
+        Number of completed steps between convergence samples. Default 500.
     compute_backend : {'jax', 'warp'}
         XLB compute backend.  ``'jax'`` enables multi-GPU via JAX (CPU also
         works).  ``'warp'`` uses NVIDIA Warp for single-GPU runs.
@@ -135,6 +241,21 @@ def solve_flow_xlb(
             f"compute_backend must be 'jax' or 'warp', got {compute_backend!r}"
         )
     backend_key = compute_backend.lower()
+    n_steps, log_every, convergence_every = validate_solver_intervals(
+        n_steps, log_every, convergence_every
+    )
+    velocity_tol, k_tol, flux_tol = normalize_convergence_tolerances(
+        tol=tol,
+        velocity_tol=velocity_tol,
+        k_tol=k_tol,
+        flux_tol=flux_tol,
+    )
+    config = ConvergenceConfig(
+        check_every=convergence_every,
+        velocity_tol=velocity_tol,
+        k_tol=k_tol,
+        flux_tol=flux_tol,
+    )
 
     try:
         import xlb
@@ -278,11 +399,8 @@ def solve_flow_xlb(
     if _backend is ComputeBackend.WARP:
         import warp as wp
 
-        from ._warp_convergence import WarpConvergenceMonitor
-
         rho_device = grid.create_field(1, dtype=precision_policy.store_precision)
         u_device = grid.create_field(3, dtype=precision_policy.store_precision)
-        warp_convergence = WarpConvergenceMonitor(u_device)
 
         def _update_macroscopic(f):
             macro(f, rho_device, u_device)
@@ -301,23 +419,52 @@ def solve_flow_xlb(
     )
     f_0, f_1, bc_mask, missing_mask = stepper.prepare_fields()
 
-    # --- Time loop ---
+    controller = None
+    monitor = None
+    if config.monitoring_enabled:
+        controller = ConvergenceController(
+            config,
+            domain_shape=solid_im.shape,
+            direction=direction,
+            nu=nu,
+            rho_in=_RHO_IN,
+            rho_out=_RHO_OUT,
+        )
+        if _backend is ComputeBackend.WARP:
+            from ._warp_convergence import WarpConvergenceMonitor
+
+            monitor = WarpConvergenceMonitor(
+                u_device, ~solid_mask, config, flow_axis
+            )
+        else:
+            monitor = _JaxConvergenceMonitor(~solid_mask, config, flow_axis)
+
     time_init = time.time()
     time_pre = time_init
-    u_previous = None
-    enable_convergence_monitor = (
-        log_every != 0
-        and n_steps >= abs(log_every)
-        and (_backend is not ComputeBackend.WARP or tol is not None)
-    )
-    final_step = n_steps
-    final_criterion = None
+    final_step = 0
+    final_report = None
 
-    for i in range(n_steps + 1):
-        f_0, f_1 = stepper(f_0, f_1, bc_mask, missing_mask, omega, i)
+    for completed_steps in range(1, n_steps + 1):
+        f_0, f_1 = stepper(
+            f_0, f_1, bc_mask, missing_mask, omega, completed_steps - 1
+        )
         f_0, f_1 = f_1, f_0  # swap buffers; f_0 now holds the updated state
+        final_step = completed_steps
 
-        if i % log_every == 0:
+        if controller is not None and controller.check_due(completed_steps):
+            rho_current, u_current = _update_macroscopic(f_0)
+            observables = monitor.sample(rho_current, u_current)
+            final_report = controller.update(observables)
+            if verbose:
+                _print_convergence_report(final_report, config)
+            if final_report.converged:
+                if verbose:
+                    print(f"Converged at step {completed_steps}")
+                break
+            if config.needs_velocity:
+                monitor.snapshot_velocity(u_current)
+
+        if log_every and completed_steps % log_every == 0:
             time_now = time.time()
             diff = int(time_now - time_pre)
             elap = int(time_now - time_init)
@@ -328,48 +475,18 @@ def solve_flow_xlb(
 
             if verbose:
                 print(
-                    f"Step {i:6d}/{n_steps}  "
+                    f"Step {completed_steps:6d}/{n_steps}  "
                     f"interval {h_d:02d}h{m_d:02d}m{s_d:02d}s  "
                     f"elapsed {h_e:02d}h{m_e:02d}m{s_e:02d}s"
                 )
-
-            if enable_convergence_monitor:
-                # rho shape: (1, nx, ny, nz); u shape: (3, nx, ny, nz)
-                _, u_current = _update_macroscopic(f_0)
-                if _backend is ComputeBackend.WARP:
-                    metrics = warp_convergence.sample(u_current)
-                    if metrics is not None:
-                        v_total = metrics.velocity_total
-                        v_change = metrics.velocity_change
-                elif u_previous is not None:
-                    metrics = None
-                    v_total, v_change = _convergence_sums_to_host(
-                        u_current, u_previous
-                    )
-                else:
-                    metrics = None
-
-                has_comparison = (
-                    metrics is not None
-                    if _backend is ComputeBackend.WARP
-                    else u_previous is not None
-                )
-                if has_comparison:
-                    if v_total > 0:
-                        final_criterion = v_change / v_total
-                    if verbose:
-                        print(f"         |v|={v_total:.4e}  delta|v|={v_change:.4e}")
-                    if tol is not None and v_total > 0 and final_criterion < tol:
-                        if verbose:
-                            print(
-                                f"Converged at step {i} "
-                                f"(delta|v|/|v| = {final_criterion:.2e} < tol={tol:.2e})"
-                            )
-                        final_step = i
-                        break
-                if _backend is not ComputeBackend.WARP:
-                    u_previous = u_current
             time_pre = time_now
+
+    converged = None if controller is None else bool(final_report and final_report.converged)
+    if verbose and final_step == n_steps and not converged:
+        if controller is None:
+            print(f"Completed {n_steps} steps with convergence monitoring disabled")
+        else:
+            print(f"Reached n_steps={n_steps} without convergence")
 
     # --- Extract final fields ---
     rho_field, u_field = _update_macroscopic(f_0)
@@ -388,8 +505,24 @@ def solve_flow_xlb(
         direction=direction,
         nu=nu,
         collision_model="srt",
+        rho_in=_RHO_IN,
+        rho_out=_RHO_OUT,
+        converged=converged,
+        n_iterations=final_step,
+        velocity_tol=velocity_tol,
+        k_tol=k_tol,
+        flux_tol=flux_tol,
+        velocity_criterion=(
+            None if final_report is None else final_report.velocity_criterion
+        ),
+        k_criterion=None if final_report is None else final_report.k_criterion,
+        flux_criterion=(
+            None if final_report is None else final_report.flux_criterion
+        ),
+        convergence_every=(convergence_every if controller is not None else None),
+        consecutive_passes=(
+            0 if final_report is None else final_report.consecutive_passes
+        ),
     )
-    result.n_iterations = final_step
-    result.convergence_criterion = final_criterion
 
     return result

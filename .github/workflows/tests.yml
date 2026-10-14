@@ -8,7 +8,21 @@ on:
 
 jobs:
   test:
+    name: test (${{ matrix.install }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The full install, with the optional XLB backend, runs every test.
+          - install: with xlb extra
+            sync: uv sync --group dev --extra xlb
+            without_xlb: "0"
+          # The default install leaves XLB, JAX and Warp out; the XLB tests skip
+          # and the missing-extra error is checked against a real environment.
+          - install: without xlb extra
+            sync: uv sync --group dev
+            without_xlb: "1"
     steps:
       - uses: actions/checkout@v6
 
@@ -24,12 +38,15 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: uv sync --group dev
+        run: ${{ matrix.sync }}
 
       - name: Run tests
-        run: uv run pytest tests/ -v --cov=kabs --cov-report=xml
+        env:
+          KABS_TEST_WITHOUT_XLB: ${{ matrix.without_xlb }}
+        run: uv run --no-sync pytest tests/ -v --cov=kabs --cov-report=xml
 
       - name: Upload coverage to Codecov
+        if: matrix.without_xlb == '0'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

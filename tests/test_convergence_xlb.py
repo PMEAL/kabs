@@ -3,14 +3,17 @@
 import importlib
 import os
 
-import jax
-import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from kabs import compute_permeability, solve_flow_xlb
-from kabs._convergence import ConvergenceConfig
-from kabs._solve_flow_xlb import (
+pytest.importorskip("xlb", reason="xlb is not installed; skipping XLB tests")
+
+import jax  # noqa: E402
+import jax.numpy as jnp  # noqa: E402
+
+from kabs import compute_permeability, solve_flow_xlb  # noqa: E402
+from kabs._convergence import ConvergenceConfig  # noqa: E402
+from kabs._solve_flow_xlb import (  # noqa: E402
     _convergence_sums_to_host,
     _get_jax_convergence_reducer,
 )

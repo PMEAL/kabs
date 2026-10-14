@@ -222,7 +222,7 @@ fresh environment:
 ```powershell
 git fetch origin
 git switch finalizing-warp-option
-uv sync --group dev
+uv sync --group dev --extra xlb
 ```
 
 Verify that Warp detects CUDA:

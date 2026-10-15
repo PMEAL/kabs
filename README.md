@@ -22,11 +22,22 @@ cd kabs
 uv sync
 ```
 
-Alternatively, install with `pip install -e .`. This installs both solvers:
-Taichi and XLB, with `warp-lang==1.10.0` pinned for compatibility with XLB.
+Alternatively, install with `pip install -e .`. This installs the default
+Taichi solver. The XLB solver, with its JAX and Warp compute backends, is the
+optional `xlb` extra, which adds XLB, JAX and `warp-lang==1.10.0` (pinned for
+compatibility with XLB):
 
-Key dependencies: `taichi` (GPU/CPU acceleration), `xlb`, `numpy`, `pyevtk`.
-Optional: `porespy` (used in the examples below to generate synthetic images).
+```bash
+uv sync --extra xlb         # in a clone
+pip install -e ".[xlb]"     # or with pip
+```
+
+Selecting `backend="xlb"` without the extra raises an `ImportError` that names
+it.
+
+Key dependencies: `taichi` (GPU/CPU acceleration), `numpy`, `pyevtk`.
+Optional: `xlb` and `warp-lang` (the `xlb` extra), and `porespy` (used in the
+examples below to generate synthetic images).
 
 ---
 
@@ -71,8 +82,9 @@ ti.init(arch=ti.metal) # Apple Silicon GPU
 ### Solver backends
 
 `solve_flow` uses the Taichi implementation by default. Select XLB through the
-same API; its default JAX compute backend works on CPU and supports multi-GPU
-execution on supported accelerator platforms:
+same API once the `xlb` extra is installed; its default JAX compute backend
+works on CPU and supports multi-GPU execution on supported accelerator
+platforms:
 
 ```python
 # Default: solve_flow(im, backend="taichi")

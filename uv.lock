@@ -890,6 +890,10 @@ dependencies = [
     { name = "trame" },
     { name = "trame-vtk" },
     { name = "trame-vuetify" },
+]
+
+[package.optional-dependencies]
+xlb = [
     { name = "warp-lang" },
     { name = "xlb" },
 ]
@@ -915,9 +919,10 @@ requires-dist = [
     { name = "trame", specifier = ">=3.12.0" },
     { name = "trame-vtk", specifier = ">=2.11.3" },
     { name = "trame-vuetify", specifier = ">=3.2.1" },
-    { name = "warp-lang", specifier = "==1.10.0" },
-    { name = "xlb", specifier = ">=0.3.1" },
+    { name = "warp-lang", marker = "extra == 'xlb'", specifier = "==1.10.0" },
+    { name = "xlb", marker = "extra == 'xlb'", specifier = ">=0.3.1" },
 ]
+provides-extras = ["xlb"]
 
 [package.metadata.requires-dev]
 dev = [

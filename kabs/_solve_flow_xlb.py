@@ -224,10 +224,13 @@ def solve_flow_xlb(
     call it with custom settings before invoking this function, set
     ``compute_backend`` to match your prior ``xlb.init()`` call.
 
-    **Installation**::
+    **Installation**: XLB and Warp are not installed with kabs by default.
+    They come with the optional ``xlb`` extra::
 
-        pip install "xlb>=0.3.1" "warp-lang==1.10.0"  # CPU/JAX
-        pip install "xlb[cuda]>=0.3.1" "warp-lang==1.10.0"  # NVIDIA GPU via JAX
+        pip install "kabs[xlb]"  # CPU/JAX and Warp
+        pip install "kabs[xlb]" "xlb[cuda]>=0.3.1"  # NVIDIA GPU via JAX
+
+    Without it, this function raises ``ImportError`` naming the extra.
     """
     if not isinstance(direction, str) or direction.lower() not in _FACE_NAMES:
         raise ValueError(f"direction must be 'x', 'y', or 'z', got {direction!r}")
@@ -271,8 +274,11 @@ def solve_flow_xlb(
         from xlb.operator.macroscopic import Macroscopic
     except ImportError as exc:
         raise ImportError(
-            "XLB is required for solve_flow_xlb. Install compatible dependencies with:\n"
-            "    pip install 'xlb>=0.3.1' 'warp-lang==1.10.0'\n"
+            "The XLB backend needs kabs's optional 'xlb' extra, which installs "
+            "XLB and Warp. Install it with:\n"
+            "    pip install 'kabs[xlb]'\n"
+            "or, in a clone of the kabs repository:\n"
+            "    uv sync --extra xlb\n"
         ) from exc
 
     _backend_map = {"jax": ComputeBackend.JAX, "warp": ComputeBackend.WARP}

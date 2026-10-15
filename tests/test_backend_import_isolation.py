@@ -33,6 +33,21 @@ def test_import_kabs_does_not_import_taichi():
     assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
+def test_import_kabs_does_not_import_the_xlb_stack():
+    completed = _run_fresh_python(
+        """
+        import sys
+        import kabs
+
+        loaded = {"xlb", "jax", "warp"} & {name.split(".")[0] for name in sys.modules}
+        assert not loaded, sorted(loaded)
+        assert "kabs._warp_convergence" not in sys.modules
+        """
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
 def test_public_single_phase_solver_export_remains_lazy():
     completed = _run_fresh_python(
         """
